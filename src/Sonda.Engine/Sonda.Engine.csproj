@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Sonda.Engine</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Sonda.Analysis\Sonda.Analysis.csproj" />
+    <ProjectReference Include="..\Sonda.Storage\Sonda.Storage.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sonda.Tests" />
+  </ItemGroup>
+</Project>

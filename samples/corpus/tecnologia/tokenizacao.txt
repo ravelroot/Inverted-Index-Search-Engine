@@ -1,0 +1,11 @@
+Tokenização: transformar texto em termos
+
+Antes de indexar qualquer documento, o texto precisa ser quebrado em unidades menores chamadas tokens. A tokenização parece simples, mas tem muitos detalhes que afetam a qualidade da busca.
+
+O primeiro passo é separar as palavras. Espaços e pontuação marcam o fim de um token, mas números como 3,14 e 1.500 devem continuar inteiros. Letras acentuadas, cedilha e til fazem parte da palavra em português e não podem ser tratadas como separadores.
+
+Depois vem a normalização. Todas as letras viram minúsculas, para que Brasil e brasil sejam o mesmo termo. Em seguida os acentos são removidos, de modo que uma busca por indice encontre documentos que escrevem índice.
+
+As palavras muito frequentes, chamadas stopwords, são descartadas. Artigos e preposições como o, a, de, para e com aparecem em praticamente todos os textos e não ajudam a distinguir documentos. Mesmo assim, a posição de cada palavra descartada é contada, para que consultas de frase continuem respeitando a distância original entre as palavras.
+
+Por fim, cada token passa pelo stemming, que reduz a palavra ao seu radical. Assim, buscar, buscando e buscas viram o mesmo termo no índice, e o usuário encontra o documento independentemente da forma usada.

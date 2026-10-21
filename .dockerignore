@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+.git/
+.github/
+docs/
+tests/
+dados/
+*.pdf
+.env
+.env.*
+!.env.example

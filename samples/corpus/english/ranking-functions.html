@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Ranking functions: TF-IDF and BM25</title>
+<meta name="description" content="A short comparison of classic ranking functions."></head>
+<body>
+<h1>Ranking functions</h1>
+<p>Search engines rank documents by estimating how relevant each one is to the query. Two classic ranking functions are TF-IDF and Okapi BM25.</p>
+<h2>TF-IDF</h2>
+<p>TF-IDF multiplies the term frequency by the inverse document frequency. Rare terms receive a high weight, while common terms such as "the" or "and" contribute almost nothing. Classic implementations take the square root of the frequency and normalize by the square root of the field length.</p>
+<h2>BM25</h2>
+<p>BM25 adds term frequency saturation and a tunable length normalization. The k1 parameter controls how quickly repeated occurrences stop adding score, and the b parameter controls how much longer documents are penalized. Default values of k1 = 1.2 and b = 0.75 work well for most collections.</p>
+<p>Most modern engines, including Lucene and Elasticsearch, use BM25 as the default similarity.</p>
+</body></html>

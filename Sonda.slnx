@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sonda.Analysis/Sonda.Analysis.csproj" />
+    <Project Path="src/Sonda.Storage/Sonda.Storage.csproj" />
+    <Project Path="src/Sonda.Engine/Sonda.Engine.csproj" />
+    <Project Path="src/Sonda.Server/Sonda.Server.csproj" />
+    <Project Path="src/Sonda.Cli/Sonda.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sonda.Tests/Sonda.Tests.csproj" />
+  </Folder>
+</Solution>

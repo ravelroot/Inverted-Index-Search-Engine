@@ -1,0 +1,9 @@
+Bibliotecas e catálogos
+
+A Biblioteca de Alexandria reunia centenas de milhares de rolos de papiro. O poeta Calímaco criou para ela os Pinakes, uma lista organizada por assunto e autor considerada um dos primeiros catálogos de biblioteca.
+
+Séculos depois, as bibliotecas passaram a usar fichas de papel guardadas em gavetas, uma por livro, ordenadas por título, autor e assunto. Cada ficha apontava para a localização do livro na estante.
+
+Em 1876, Melvil Dewey publicou a Classificação Decimal, que divide o conhecimento em dez classes numeradas. O sistema ainda é usado em muitas bibliotecas escolares e públicas.
+
+O catálogo de fichas por assunto funciona como um índice invertido feito à mão: para cada assunto, uma lista de livros. A diferença é que um computador consegue montar essa lista para cada palavra de cada página, e não só para o assunto principal.

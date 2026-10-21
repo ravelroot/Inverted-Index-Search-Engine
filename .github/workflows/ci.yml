@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/atividade.txt"
+      - "**/*.md"
+      - "**/*.pdf"
+      - "docs/**"
+  pull_request:
+  schedule:
+    - cron: "47 13 * * *"  # todo dia às 10:47 (Brasília)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, testes e benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restaurar
+        run: dotnet restore Sonda.slnx
+
+      - name: Compilar
+        run: dotnet build Sonda.slnx -c Release --no-restore
+
+      - name: Testes
+        run: dotnet test tests/Sonda.Tests/Sonda.Tests.csproj -c Release --no-build
+
+      - name: Indexar os exemplos pela linha de comando
+        run: |
+          dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll indexar samples/corpus --fonte exemplos --indice /tmp/sonda-ci
+          dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll buscar "índice invertido" --indice /tmp/sonda-ci
+          dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll verificar --indice /tmp/sonda-ci
+
+      - name: Benchmark curto
+        run: dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll benchmark --docs 20000 --consultas 200
+
+  docker:
+    name: Imagem Docker
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t sonda:ci .

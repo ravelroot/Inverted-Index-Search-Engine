@@ -1,0 +1,71 @@
+name: Atividade diária
+
+on:
+  schedule:
+    - cron: "19 3 * * *"
+    - cron: "53 3 * * *"
+    - cron: "23 6 * * *"
+    - cron: "51 6 * * *"
+  workflow_dispatch:
+    inputs:
+      registro:
+        description: Registro a gravar
+        type: choice
+        options:
+          - 1º registro
+          - 2º registro
+        default: 1º registro
+
+permissions:
+  contents: write
+
+concurrency:
+  group: atividade-diaria
+  cancel-in-progress: false
+
+jobs:
+  registrar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Registrar atividade
+        env:
+          GIT_NAME: ${{ secrets.GIT_NAME }}
+          GIT_EMAIL: ${{ secrets.GIT_EMAIL }}
+          AGENDA: ${{ github.event.schedule }}
+          REGISTRO_MANUAL: ${{ inputs.registro }}
+        run: |
+          if [ -z "$GIT_NAME" ] || [ -z "$GIT_EMAIL" ]; then
+            echo "Defina os secrets GIT_NAME e GIT_EMAIL no repositório."
+            exit 1
+          fi
+          case "$AGENDA" in
+            "19 3 * * *"|"53 3 * * *") REGISTRO="1º registro" ;;
+            "23 6 * * *"|"51 6 * * *") REGISTRO="2º registro" ;;
+            *) REGISTRO="${REGISTRO_MANUAL:-1º registro}" ;;
+          esac
+          export TZ=America/Sao_Paulo
+          HOJE=$(date +%Y-%m-%d)
+          ARQUIVO=.github/atividade.txt
+          git config user.name "$GIT_NAME"
+          git config user.email "$GIT_EMAIL"
+          git pull --rebase --quiet origin main
+          if grep -q "^$HOJE $REGISTRO " "$ARQUIVO" 2>/dev/null; then
+            echo "O $REGISTRO de hoje já foi gravado."
+            exit 0
+          fi
+          echo "$HOJE $REGISTRO $(date +%H:%M) (Brasília)" >> "$ARQUIVO"
+          tail -n 60 "$ARQUIVO" > "$ARQUIVO.tmp" && mv "$ARQUIVO.tmp" "$ARQUIVO"
+          git add "$ARQUIVO"
+          git commit -m "Atividade de $(date +%d/%m/%Y) ($REGISTRO)"
+          for tentativa in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep $((tentativa * 15))
+            git pull --rebase origin main
+          done
+          echo "Não foi possível enviar o commit depois de 3 tentativas."
+          exit 1

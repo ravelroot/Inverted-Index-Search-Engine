@@ -1,0 +1,11 @@
+Manual rápido da impressora do escritório
+
+Este é um manual fictício de demonstração.
+
+Para imprimir, selecione a impressora Escritório-01 na lista do sistema. Documentos frente e verso devem ser enviados com a opção duplex ativada.
+
+Atolamento de papel: abra a tampa frontal, puxe o papel com cuidado na direção da saída e feche a tampa. Nunca use objetos metálicos para retirar folhas presas.
+
+Troca de toner: quando o painel mostrar o aviso de toner baixo, agite levemente o cartucho para redistribuir o pó e continue imprimindo. Quando o aviso mudar para toner vazio, substitua o cartucho seguindo as setas indicadas na peça.
+
+Digitalização: coloque o documento virado para baixo no vidro, escolha digitalizar para pasta e informe o seu usuário. O arquivo em PDF fica disponível na pasta compartilhada em até um minuto.

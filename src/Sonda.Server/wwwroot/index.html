@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Sonda · Busca de texto completo</title>
+  <link rel="icon" href="img/icone.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div class="estrutura">
+    <aside class="lateral">
+      <a class="marca" href="#/">
+        <img src="img/icone.svg" alt="">
+        <span><strong>Sonda</strong><small>Busca de texto completo</small></span>
+      </a>
+      <nav class="nav" aria-label="Navegação principal">
+        <a href="#/" data-rota="busca"><span data-icone="busca"></span>Busca</a>
+        <p class="nav-grupo">Índice</p>
+        <a href="#/indice" data-rota="indice"><span data-icone="indice"></span>Visão geral</a>
+        <a href="#/fontes" data-rota="fontes"><span data-icone="pasta"></span>Fontes</a>
+        <a href="#/termos" data-rota="termos"><span data-icone="termos"></span>Termos</a>
+      </nav>
+      <div class="lateral-rodape">
+        <div class="situacao" id="situacao">
+          <strong>Carregando…</strong>
+          <span>&nbsp;</span>
+        </div>
+        <div class="acoes-lateral">
+          <button class="icone-botao" type="button" id="alternar-tema" title="Alternar tema claro e escuro" aria-label="Alternar tema claro e escuro"><span data-icone="lua"></span></button>
+          <a class="icone-botao" href="api/info" target="_blank" rel="noopener" title="Informações da API" aria-label="Informações da API"><span data-icone="api"></span></a>
+        </div>
+      </div>
+    </aside>
+    <main class="conteudo" id="conteudo" tabindex="-1"></main>
+  </div>
+  <div class="avisos" id="avisos" aria-live="polite"></div>
+</body>
+</html>

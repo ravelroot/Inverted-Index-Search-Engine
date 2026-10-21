@@ -1,0 +1,9 @@
+The Porter stemming algorithm
+
+Martin Porter published his suffix stripping algorithm in 1980. It reduces English words to a common stem by removing suffixes in five steps.
+
+Step one handles plurals and past participles: caresses becomes caress, ponies becomes poni, and hopping becomes hop. Step two maps double suffixes to single ones, so relational becomes relate and conditional becomes condition. Steps three and four remove endings such as ness, ful, ance, ence, ment and ize when the remaining stem is long enough.
+
+The algorithm measures the stem as a sequence of consonant and vowel groups. A rule only applies when the measure is large enough, which prevents short words from being destroyed.
+
+Stems are not always real words. Generalization and generalizations both become gener, and that is exactly what a search engine needs: searching for one form finds documents that contain the others.

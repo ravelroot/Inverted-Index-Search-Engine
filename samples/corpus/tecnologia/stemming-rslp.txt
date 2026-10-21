@@ -1,0 +1,11 @@
+Stemming em português com o algoritmo RSLP
+
+O RSLP, Removedor de Sufixos da Língua Portuguesa, foi proposto por Viviane Orengo e Christian Huyck em 2001. Ele reduz palavras ao radical aplicando regras em oito etapas, sempre na mesma ordem.
+
+A primeira etapa trata o plural: casas vira casa, canções vira canção, papéis vira papel. A segunda trata o feminino: professora vira professor e menina vira menino. Depois vêm os aumentativos e diminutivos, como casinha e carrão, e a remoção do sufixo de advérbio, como em rapidamente.
+
+As etapas seguintes removem sufixos de substantivos, como mento, ção e idade, e sufixos verbais, como ando, endo, aria e essem. Se nenhum sufixo verbal for encontrado, uma última etapa remove a vogal final. Cada regra tem um tamanho mínimo de radical e uma lista de exceções, para evitar estragos como transformar mesa em mês.
+
+O resultado nem sempre é uma palavra real. Indexação, indexar e indexado podem virar o mesmo radical, e é justamente isso que importa: a busca passa a encontrar todas as formas da palavra.
+
+Para textos em inglês, o algoritmo equivalente é o de Martin Porter, publicado em 1980, que faz o mesmo trabalho com regras próprias da língua inglesa.

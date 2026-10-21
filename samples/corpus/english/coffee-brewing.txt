@@ -1,0 +1,9 @@
+Coffee brewing basics
+
+Good coffee depends on four variables: the ratio of coffee to water, the grind size, the water temperature and the contact time.
+
+A common starting ratio is one gram of coffee for every sixteen grams of water. Use water just off the boil, between 90 and 96 degrees Celsius.
+
+Grind size must match the brewing method. Espresso needs a fine grind and about 25 seconds of extraction under pressure. A French press uses a coarse grind and four minutes of immersion. Pour-over methods sit in between, with a medium grind and a total brew time of about three minutes.
+
+If the coffee tastes sour, it is under-extracted: grind finer or brew longer. If it tastes bitter, it is over-extracted: grind coarser or shorten the brew.

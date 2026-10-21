@@ -1,0 +1,9 @@
+Por que não usar LIKE em um banco de dados
+
+Uma consulta como SELECT * FROM artigos WHERE texto LIKE '%motor%' parece resolver a busca, mas não escala. O caractere curinga no começo do padrão impede o uso de índices B-tree, e o banco precisa ler cada linha da tabela, comparar o texto inteiro e só então devolver o resultado.
+
+Com dez mil linhas isso passa despercebido. Com dez milhões, cada busca vira uma varredura completa de gigabytes de dados.
+
+Além do desempenho, o LIKE não entende linguagem. Ele não sabe que motores e motor são a mesma palavra, não ignora acentos, não ordena por relevância e não destaca os trechos encontrados. O resultado vem na ordem em que as linhas estão gravadas, não na ordem do que é mais útil para quem pesquisou.
+
+Bancos relacionais modernos oferecem recursos de texto completo, como o tsvector do PostgreSQL e o FULLTEXT do MySQL, que usam índices invertidos por baixo. Um motor de busca dedicado vai além: controla a análise de texto, a pontuação, a compressão e a distribuição dos dados.

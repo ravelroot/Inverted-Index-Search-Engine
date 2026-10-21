@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Busca distribuída: shards, réplicas e agregação</title>
+<meta name="description" content="Como motores de busca dividem um índice entre vários servidores.">
+<style>body { font-family: sans-serif; }</style>
+<script>console.log("este texto não deve ser indexado");</script>
+</head>
+<body>
+<h1>Busca distribuída</h1>
+<p>Quando um único servidor não dá conta do volume de documentos, o índice é dividido em <strong>shards</strong>. Cada shard é um índice completo e independente, com uma parte dos documentos.</p>
+<p>Uma consulta é enviada a todos os shards ao mesmo tempo. Cada um devolve os seus melhores resultados e um coordenador junta as listas, reordena pela pontuação e devolve o top 10 final.</p>
+<h2>Estatísticas globais</h2>
+<p>O BM25 depende do idf, que depende de quantos documentos contêm cada termo. Se cada shard calcular o idf só com os seus documentos, as pontuações deixam de ser comparáveis. Por isso alguns sistemas fazem uma fase extra para somar as estatísticas de todos os shards antes de pontuar.</p>
+<h2>Réplicas</h2>
+<p>Réplicas são cópias de um shard em outros servidores. Elas aumentam a capacidade de consultas por segundo e mantêm o serviço no ar quando uma máquina cai.</p>
+<p>Tabela: <table><tr><td>Shards</td><td>dividem os dados</td></tr><tr><td>Réplicas</td><td>multiplicam a leitura</td></tr></table></p>
+</body>
+</html>
