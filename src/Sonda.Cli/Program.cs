@@ -6,6 +6,7 @@ using Sonda.Analysis;
 using Sonda.Cli;
 using Sonda.Engine;
 using Sonda.Engine.Crawling;
+using Sonda.Engine.Export;
 using Sonda.Engine.Index;
 using Sonda.Engine.Search;
 using Sonda.Storage;
@@ -29,6 +30,7 @@ try
     {
         "indexar" or "index" => await Commands.IndexAsync(arguments, cancellation.Token),
         "buscar" or "search" => Commands.Search(arguments),
+        "semelhantes" or "similar" or "mlt" => Commands.Similar(arguments),
         "estatisticas" or "estatísticas" or "stats" => Commands.Stats(arguments),
         "termos" or "terms" => Commands.Terms(arguments),
         "postagens" or "postings" => Commands.Postings(arguments),
@@ -195,6 +197,29 @@ internal static class Commands
             Facets = true,
         };
 
+        var formato = args.Get("formato", "format");
+        if (formato is not null)
+        {
+            if (!SearchExport.TryParseFormat(formato, out var format))
+            {
+                throw new ArgumentException("Formato desconhecido. Use --formato csv, json ou ndjson.");
+            }
+
+            var batch = engine.SearchMany(request with { Facets = false }, args.GetInt(500, "limite", "limit"));
+            var bytes = SearchExport.Encode(format, text, batch.First.Total, [.. SearchExport.Rows(batch.Hits)], DateTimeOffset.UtcNow);
+            var output = args.Get("saida", "saída", "output");
+            if (output is null)
+            {
+                using var stdout = Console.OpenStandardOutput();
+                stdout.Write(bytes);
+                return 0;
+            }
+
+            File.WriteAllBytes(output, bytes);
+            Output.Dim($"{batch.Hits.Count} resultado(s) exportado(s) em {output}.");
+            return 0;
+        }
+
         var response = engine.Search(request);
         if (args.Flag("json"))
         {
@@ -243,6 +268,41 @@ internal static class Commands
             {
                 Output.Dim($"{field}: " + string.Join("  ", counts.Take(8).Select(c => $"{c.Key} ({c.Value})")));
             }
+        }
+
+        return 0;
+    }
+
+    public static int Similar(Arguments args)
+    {
+        var key = args.Positional(0);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            throw new ArgumentException("Informe a chave do documento (fonte:caminho): sonda semelhantes exemplos:tecnologia/bm25-relevancia.md");
+        }
+
+        using var engine = OpenForReading(args);
+        var similar = engine.MoreLikeThis(key.Replace('\\', '/'), args.GetInt(5, "top", "limite", "limit"))
+            ?? throw new ArgumentException($"Documento não encontrado: {key}. A chave é fonte:caminho, como aparece no resultado da busca.");
+        if (args.Flag("json"))
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { termos = similar.Terms, hits = similar.Hits }, Json));
+            return 0;
+        }
+
+        Output.Title($"Documentos semelhantes a {key}");
+        Output.Dim("Termos característicos: " + (similar.Terms.Count == 0 ? "nenhum em comum com outros documentos" : string.Join(", ", similar.Terms)));
+        Output.Line();
+        var rank = 1;
+        foreach (var hit in similar.Hits)
+        {
+            Console.WriteLine($"{rank++,3}. {hit.Title}");
+            Output.Dim($"     {hit.Source}:{hit.Path} · pontuação {hit.Score:0.###}");
+        }
+
+        if (similar.Hits.Count == 0)
+        {
+            Output.Dim("Nenhum documento parecido encontrado.");
         }
 
         return 0;
@@ -403,7 +463,8 @@ internal static class Commands
             ["Comando", "O que faz"],
             [
                 ["indexar <pasta>", "Indexa .txt, .md e .html da pasta (incremental). --fonte, --incluir, --excluir, --completo, --paralelismo, --idioma"],
-                ["buscar \"consulta\"", "Busca com BM25. --top, --pagina, --tfidf, --ou, --explicar, --recentes, --tipo, --fonte, --json"],
+                ["buscar \"consulta\"", "Busca com BM25. --top, --pagina, --tfidf, --ou, --explicar, --recentes, --tipo, --fonte, --json, --formato csv|json|ndjson, --limite, --saida"],
+                ["semelhantes <fonte:caminho>", "Documentos parecidos com um documento (mais como este). --top, --json"],
                 ["estatisticas", "Documentos, segmentos, campos e tamanho do índice. --json"],
                 ["termos", "Lista o dicionário de termos. --campo, --prefixo, --limite, --frequencia"],
                 ["postagens <termo>", "Mostra a lista invertida de um termo: segmentos, ponteiros, documentos e posições"],

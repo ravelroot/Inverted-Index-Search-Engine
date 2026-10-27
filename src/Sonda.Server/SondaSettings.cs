@@ -22,6 +22,8 @@ public sealed class SondaSettings
 
     public ApiSettings Api { get; set; } = new();
 
+    public WebhookSettings Webhooks { get; set; } = new();
+
     public List<SourceSettings> Sources { get; set; } = [];
 
     public List<string> AllowedRoots { get; set; } = [];
@@ -121,6 +123,27 @@ public sealed class ApiSettings
     public bool ProtectReads { get; set; }
 
     public List<string> AllowedOrigins { get; set; } = [];
+}
+
+public sealed class WebhookSettings
+{
+    public List<string> Urls { get; set; } = [];
+
+    public string? Secret { get; set; }
+
+    /// <summary>Eventos enviados (execucao, indice, fila, progresso). Vazio usa execucao e indice.</summary>
+    public List<string> Events { get; set; } = [];
+
+    public int TimeoutSeconds { get; set; } = 10;
+
+    public IReadOnlyList<string> EffectiveEvents => Events.Count > 0
+        ? [.. Events.Select(e => e.Trim().ToLowerInvariant()).Where(e => e.Length > 0).Distinct(StringComparer.Ordinal)]
+        : ["execucao", "indice"];
+
+    public IReadOnlyList<Uri> ValidUrls => [.. Urls
+        .Select(u => Uri.TryCreate(u?.Trim(), UriKind.Absolute, out var uri) ? uri : null)
+        .OfType<Uri>()
+        .Where(u => u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps)];
 }
 
 public sealed class SourceSettings

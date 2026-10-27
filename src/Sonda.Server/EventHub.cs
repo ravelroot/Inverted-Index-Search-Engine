@@ -15,6 +15,9 @@ public sealed class EventHub
 
     public int Subscribers => _subscribers.Count;
 
+    /// <summary>Disparado a cada evento publicado, com o nome e o JSON já serializado (usado pelos webhooks).</summary>
+    public event Action<string, string>? Published;
+
     public void Publish<T>(string name, T payload)
     {
         var data = JsonSerializer.Serialize(payload, _json);
@@ -23,6 +26,8 @@ public sealed class EventHub
         {
             channel.Writer.TryWrite(item);
         }
+
+        Published?.Invoke(name, data);
     }
 
     public (Guid Id, ChannelReader<ServerEvent> Reader) Subscribe()

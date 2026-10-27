@@ -1,5 +1,5 @@
 import { api, parametros } from '../api.js';
-import { carregando, el, fmt, segmentado, tabela } from '../ui.js';
+import { cabecalho, carregando, el, fmt, segmentado, tabela } from '../ui.js';
 
 const CAMPOS = [['body', 'Corpo'], ['title', 'Título'], ['path', 'Caminho'], ['ext', 'Tipo'], ['lang', 'Idioma'], ['source', 'Fonte']];
 
@@ -110,8 +110,7 @@ export async function render(alvo, parametrosRota) {
   }
 
   alvo.append(
-    el('header', { class: 'cabecalho' },
-      el('div', {}, el('h1', { text: 'Termos' }), el('p', { text: 'O dicionário do índice invertido e o caminho de cada palavra até virar termo.' }))),
+    cabecalho('Índice', 'Termos', 'O dicionário do índice invertido e o caminho de cada palavra até virar termo.'),
     el('div', { class: 'termos-grade' },
       el('section', { class: 'painel' },
         el('div', { class: 'painel-cabecalho' }, el('div', {}, el('h2', { text: 'Dicionário' }), el('p', { text: 'Termos somados entre todos os segmentos.' }))),

@@ -11,6 +11,26 @@ const ICONES = {
   mais: '<path d="M12 5v14M5 12h14"/>',
   escudo: '<path d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6Z"/><path d="m9 12 2 2 4-4"/>',
   mesclar: '<path d="M6 4v5a4 4 0 0 0 4 4h8M6 20v-5M15 9l4 4-4 4"/>',
+  tomada: '<path d="M9 3.5v4M15 3.5v4M6.5 7.5h11v3a5.5 5.5 0 0 1-11 0Z"/><path d="M12 16v4.5"/>',
+  comando: '<path d="M9 6.5a2.5 2.5 0 1 0-2.5 2.5H9Zm0 0v11m0-11h6m-6 11a2.5 2.5 0 1 1-2.5-2.5H9Zm0 0h6m0 0v-11m0 11a2.5 2.5 0 1 0 2.5-2.5H15Zm0-11a2.5 2.5 0 1 1 2.5 2.5H15"/>',
+  teclado: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/>',
+  relogio: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/>',
+  estrela: '<path d="m12 4 2.3 4.9 5.2.6-3.9 3.6 1.1 5.2L12 15.6 7.3 18.3l1.1-5.2-3.9-3.6 5.2-.6Z"/>',
+  baixar: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>',
+  copiar: '<rect x="8.5" y="8.5" width="11" height="11" rx="1.5"/><path d="M15.5 8.5v-3a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 5.5V14A1.5 1.5 0 0 0 6 15.5h2.5"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  feed: '<path d="M5 5a14 14 0 0 1 14 14M5 11a8 8 0 0 1 8 8"/><circle cx="6" cy="18" r="1.3"/>',
+  cima: '<path d="m6 15 6-6 6 6"/>',
+  baixo: '<path d="m6 9 6 6 6-6"/>',
+  seta: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  documento: '<path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5Z"/><path d="M13.5 3.5V8h4.5M8.5 12.5h7M8.5 16h5"/>',
+  densidade: '<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>',
+  pulso: '<path d="M3 12h4l2-5 4 10 2-5h6"/>',
+  sonar: '<path d="M12 4v9"/><circle cx="12" cy="15" r="2"/><path d="M7 17.5a6 6 0 0 0 10 0M4.5 19.5a9.5 9.5 0 0 0 15 0"/>',
+  navegador: '<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M3 9h18M6.5 6.8h.01M9 6.8h.01"/>',
+  gancho: '<path d="M18 8.5a3.5 3.5 0 1 0-6.4 2L8 17"/><circle cx="6.5" cy="18" r="2.5"/><path d="M14 18h4.5M16 12.5l2.5 5"/>',
+  tabela: '<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10"/>',
+  mais_como: '<circle cx="9" cy="10" r="4.5"/><circle cx="15" cy="14" r="4.5"/>',
 };
 
 export function icone(nome) {
@@ -41,7 +61,13 @@ export function el(tag, atributos = {}, ...filhos) {
     } else if (nome === 'dataset') {
       Object.assign(elemento.dataset, valor);
     } else if (nome === 'style' && typeof valor === 'object') {
-      Object.assign(elemento.style, valor);
+      for (const [propriedade, conteudo] of Object.entries(valor)) {
+        if (propriedade.startsWith('--')) {
+          elemento.style.setProperty(propriedade, conteudo);
+        } else {
+          elemento.style[propriedade] = conteudo;
+        }
+      }
     } else if (valor === true) {
       elemento.setAttribute(nome, '');
     } else {
@@ -171,4 +197,147 @@ export function preencher(alvo, ...filhos) {
 
 export function carregando(texto = 'Carregando…') {
   return el('div', { class: 'carregando', text: texto });
+}
+
+export const local = {
+  ler(chave, padrao) {
+    try {
+      const valor = localStorage.getItem(`sonda-${chave}`);
+      return valor === null ? padrao : JSON.parse(valor);
+    } catch {
+      return padrao;
+    }
+  },
+  gravar(chave, valor) {
+    try {
+      localStorage.setItem(`sonda-${chave}`, JSON.stringify(valor));
+    } catch {
+      // armazenamento indisponível: segue só na memória
+    }
+  },
+};
+
+export function historico() {
+  return local.ler('historico', []);
+}
+
+export function registrarBusca(consulta) {
+  const texto = (consulta ?? '').trim();
+  if (!texto) {
+    return;
+  }
+  const lista = historico().filter((q) => q !== texto);
+  lista.unshift(texto);
+  local.gravar('historico', lista.slice(0, 12));
+}
+
+export function salvas() {
+  return local.ler('salvas', []);
+}
+
+export function alternarSalva(consulta) {
+  const lista = salvas();
+  const existe = lista.includes(consulta);
+  local.gravar('salvas', existe ? lista.filter((q) => q !== consulta) : [consulta, ...lista].slice(0, 20));
+  return !existe;
+}
+
+export async function copiar(texto, mensagem = 'Copiado.') {
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch {
+    const area = el('textarea', { style: { position: 'fixed', opacity: '0' } });
+    area.value = texto;
+    document.body.append(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+  aviso(mensagem);
+}
+
+export function baixar(url) {
+  const link = el('a', { href: url, download: '' });
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+export function sondagem(valor) {
+  const texto = fmt.decimal(valor, 3);
+  const [inteiro, fracao] = texto.split(',');
+  return el('strong', { title: `Pontuação ${texto}` }, inteiro, fracao ? el('sub', { text: `,${fracao}` }) : null);
+}
+
+export function escala(proporcao) {
+  const p = Math.max(0, Math.min(1, proporcao)) * 5;
+  return el('div', { class: 'escala', 'aria-hidden': 'true' },
+    [0, 1, 2, 3, 4].map((i) => {
+      if (p >= i + 1) {
+        return el('i', { class: 'cheio' });
+      }
+      if (p > i) {
+        return el('i', { class: 'parcial', style: { '--p': `${Math.round((p - i) * 100)}%` } });
+      }
+      return el('i');
+    }));
+}
+
+export function menu(botao, itens) {
+  const caixa = el('div', { class: 'menu' }, botao);
+  let lista = null;
+  const fechar = () => {
+    lista?.remove();
+    lista = null;
+    document.removeEventListener('click', foraDoMenu, true);
+    botao.setAttribute('aria-expanded', 'false');
+  };
+  const foraDoMenu = (evento) => {
+    if (!caixa.contains(evento.target)) {
+      fechar();
+    }
+  };
+  botao.setAttribute('aria-haspopup', 'menu');
+  botao.setAttribute('aria-expanded', 'false');
+  botao.addEventListener('click', () => {
+    if (lista) {
+      fechar();
+      return;
+    }
+    lista = el('div', { class: 'menu-lista', role: 'menu' },
+      itens.map((item) => el('button', {
+        type: 'button',
+        role: 'menuitem',
+        onclick: () => {
+          fechar();
+          item.acao();
+        },
+      }, item.icone ? icone(item.icone) : null, item.texto, item.detalhe ? el('small', { text: item.detalhe }) : null)));
+    caixa.append(lista);
+    botao.setAttribute('aria-expanded', 'true');
+    lista.querySelector('button')?.focus();
+    document.addEventListener('click', foraDoMenu, true);
+  });
+  caixa.addEventListener('keydown', (evento) => {
+    if (evento.key === 'Escape' && lista) {
+      evento.stopPropagation();
+      fechar();
+      botao.focus();
+    }
+  });
+  return caixa;
+}
+
+export function cabecalho(sobretitulo, titulo, descricao, ...acoes) {
+  return el('header', { class: 'cabecalho' },
+    el('div', {}, el('span', { class: 'sobretitulo', text: sobretitulo }), el('h1', { text: titulo }), descricao ? el('p', { text: descricao }) : null),
+    acoes.length ? el('div', { class: 'cabecalho-acoes' }, acoes) : null);
+}
+
+export function tecla(...teclas) {
+  return teclas.map((t) => el('kbd', { text: t }));
+}
+
+export function ehMac() {
+  return /Mac|iPhone|iPad/.test(navigator.platform ?? '') || /Mac OS/.test(navigator.userAgent);
 }

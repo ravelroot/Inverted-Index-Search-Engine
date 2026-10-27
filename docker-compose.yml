@@ -11,6 +11,8 @@ services:
       Sonda__Api__ApiKey: ${SONDA_API_KEY:-}
       Sonda__Analysis__Language: ${SONDA_IDIOMA:-auto}
       Sonda__Indexing__RamBufferMb: ${SONDA_RAM_MB:-128}
+      Sonda__Webhooks__Urls__0: ${SONDA_WEBHOOK_URL:-}
+      Sonda__Webhooks__Secret: ${SONDA_WEBHOOK_SEGREDO:-}
       Sonda__Sources__0__Name: documentos
       Sonda__Sources__0__Path: /documentos
       Sonda__Sources__0__Watch: "true"

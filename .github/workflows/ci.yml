@@ -49,6 +49,8 @@ jobs:
           dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll indexar samples/corpus --fonte exemplos --indice /tmp/sonda-ci
           dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll buscar "índice invertido" --indice /tmp/sonda-ci
           dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll verificar --indice /tmp/sonda-ci
+          dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll buscar "índice invertido" --formato csv --indice /tmp/sonda-ci
+          dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll semelhantes exemplos:tecnologia/bm25-relevancia.md --indice /tmp/sonda-ci
 
       - name: Benchmark curto
         run: dotnet src/Sonda.Cli/bin/Release/net10.0/sonda.dll benchmark --docs 20000 --consultas 200

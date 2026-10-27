@@ -1,6 +1,6 @@
 import { api } from '../api.js';
-import { atualizarSituacao } from '../app.js';
-import { aviso, carregando, el, fmt, icone, ponto, tabela } from '../ui.js';
+import { atualizarSituacao, navegar } from '../app.js';
+import { aviso, cabecalho, carregando, el, fmt, icone, ponto, tabela } from '../ui.js';
 
 const NOMES_CAMPO = { title: 'Título', body: 'Corpo', path: 'Caminho', id: 'Chave do documento' };
 const ORIGEM = { flush: 'buffer', merge: 'mesclagem' };
@@ -8,14 +8,13 @@ const NOMES_IDIOMA = { pt: 'Português', en: 'Inglês' };
 
 export async function render(alvo) {
   alvo.append(
-    el('header', { class: 'cabecalho' },
-      el('div', {}, el('h1', { text: 'Visão geral do índice' }), el('p', { text: 'Segmentos imutáveis em disco, estatísticas dos campos e manutenção.' }))),
+    cabecalho('Índice', 'Visão geral', 'Segmentos imutáveis em disco, estatísticas dos campos, o que as pessoas estão procurando e a manutenção do índice.'),
     carregando());
 
   const atualizar = async () => {
     try {
-      const dados = await api('/indice');
-      alvo.replaceChildren(alvo.firstChild, ...montar(dados, atualizar));
+      const [dados, consultas] = await Promise.all([api('/indice'), api('/buscas/estatisticas').catch(() => null)]);
+      alvo.replaceChildren(alvo.firstChild, ...montar(dados, atualizar, consultas));
     } catch (erro) {
       alvo.replaceChildren(alvo.firstChild, el('div', { class: 'aviso-relaxado', text: erro.message }));
     }
@@ -27,7 +26,7 @@ export async function render(alvo) {
   return () => window.removeEventListener('sonda:indice', aoMudar);
 }
 
-function montar(dados, atualizar) {
+function montar(dados, atualizar, consultas) {
   const corpo = dados.fields.find((f) => f.field === 'body');
   const maiorSegmento = Math.max(1, ...dados.segments.map((s) => s.documents));
   const fichas = el('div', { class: 'fichas' },
@@ -35,7 +34,7 @@ function montar(dados, atualizar) {
     ficha('Termos distintos', fmt.numero(corpo?.terms ?? 0), 'no campo corpo, somando segmentos'),
     ficha('Segmentos', fmt.numero(dados.segments.length), `ponto de gravação segments_${dados.generation}`),
     ficha('Tamanho em disco', fmt.bytes(dados.sizeBytes), 'todos os arquivos do índice'),
-    ficha('Última gravação', dados.lastCommit ? fmt.dataHora(dados.lastCommit) : 'nunca', dados.writer ? `${fmt.numero(dados.writer.bufferedDocuments)} documento(s) no buffer` : 'aberto só para leitura'));
+    ficha('Última gravação', dados.lastCommit ? new Date(dados.lastCommit).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'nunca', `${dados.lastCommit ? `${fmt.data(dados.lastCommit)} · ` : ''}${dados.writer ? `${fmt.numero(dados.writer.bufferedDocuments)} no buffer` : 'só leitura'}`));
 
   const segmentos = el('section', { class: 'painel' },
     el('div', { class: 'painel-cabecalho' }, el('div', {}, el('h2', { text: 'Segmentos' }), el('p', { text: 'Cada segmento tem dicionário, postagens, posições, normas, campos armazenados e doc values próprios.' }))),
@@ -110,7 +109,28 @@ function montar(dados, atualizar) {
       grupo('Idioma', dados.byLanguage, dados.documents, true, NOMES_IDIOMA),
       grupo('Tipo', dados.byExtension, dados.documents, true)));
 
-  return [fichas, el('div', { class: 'duas-colunas' }, el('div', { class: 'pilha' }, segmentos, campos), el('div', { class: 'pilha' }, distribuicao, manutencao))];
+  return [fichas, el('div', { class: 'duas-colunas' }, el('div', { class: 'pilha' }, painelConsultas(consultas), segmentos, campos), el('div', { class: 'pilha' }, distribuicao, manutencao))];
+}
+
+function painelConsultas(dados) {
+  const cabecalhoPainel = el('div', { class: 'painel-cabecalho' },
+    el('div', {}, el('h2', { text: 'Consultas' }), el('p', { text: 'O que foi pesquisado desde que o servidor iniciou. Buscas sem resultado mostram lacunas no acervo.' })));
+  if (!dados) {
+    return el('section', { class: 'painel' }, cabecalhoPainel, el('div', { class: 'vazio-painel', text: 'Estatísticas de busca indisponíveis.' }));
+  }
+  const item = (c, detalhe) => el('button', { type: 'button', class: 'consulta-item', onclick: () => navegar('busca', { q: c.consulta }) }, el('span', { text: c.consulta }), el('small', { text: detalhe }));
+  return el('section', { class: 'painel' },
+    cabecalhoPainel,
+    el('div', { class: 'consultas-grade' },
+      el('div', {}, el('span', { text: 'Buscas' }), el('strong', { text: fmt.numero(dados.total) })),
+      el('div', {}, el('span', { text: 'Sem resultado' }), el('strong', { text: dados.total ? `${fmt.decimal((dados.semResultado / dados.total) * 100, 0)}%` : '—' })),
+      el('div', {}, el('span', { text: 'Tempo médio' }), el('strong', { text: dados.total ? `${fmt.decimal(dados.mediaMs, 1)} ms` : '—' })),
+      el('div', {}, el('span', { text: 'p95' }), el('strong', { text: dados.total ? `${fmt.decimal(dados.p95Ms, 1)} ms` : '—' }))),
+    el('div', { class: 'consultas-listas' },
+      el('div', {}, el('h3', { text: 'Mais pesquisadas' }),
+        dados.principais?.length ? dados.principais.slice(0, 6).map((c) => item(c, `${c.vezes}× · ${fmt.numero(c.ultimoTotal)} res.`)) : el('p', { class: 'mudo', style: { padding: '6px 18px 14px', fontSize: 'var(--t-sm)' }, text: 'Nenhuma busca ainda.' })),
+      el('div', {}, el('h3', { text: 'Sem resultado' }),
+        dados.semResultados?.length ? dados.semResultados.slice(0, 6).map((c) => item(c, `${c.vezes}×`)) : el('p', { class: 'mudo', style: { padding: '6px 18px 14px', fontSize: 'var(--t-sm)' }, text: 'Toda busca encontrou algo.' }))));
 }
 
 function ficha(rotulo, valor, detalhe) {
@@ -129,7 +149,7 @@ function barra(proporcao, excluidos) {
 function grupo(titulo, valores, total, comPonto, nomes = {}) {
   const entradas = Object.entries(valores ?? {});
   return el('div', {},
-    el('h3', { style: { fontSize: 'var(--t-xs)', color: 'var(--cinza)', marginBottom: '8px' }, text: titulo }),
+    el('h3', { text: titulo }),
     entradas.length === 0
       ? el('p', { class: 'mudo', text: '—' })
       : entradas.map(([valor, quantidade]) => el('div', { class: 'linha' },

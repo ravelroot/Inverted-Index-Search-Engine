@@ -124,6 +124,10 @@ public sealed record DocumentView(StoredDocument Document, IReadOnlyList<Highlig
 
 public sealed record VerificationResult(int Files, int Valid, IReadOnlyList<string> Problems, double ElapsedMs);
 
+public sealed record SimilarDocuments(string Key, IReadOnlyList<string> Terms, string Query, IReadOnlyList<SearchHit> Hits);
+
+public sealed record SearchBatch(SearchResponse First, IReadOnlyList<SearchHit> Hits);
+
 public sealed class SondaEngine : IDisposable
 {
     private readonly SemaphoreSlim _indexingGate = new(1, 1);
@@ -338,6 +342,110 @@ public sealed class SondaEngine : IDisposable
 
         var fragments = Highlighter.Highlight(Analyzer, body, LanguageCodes.FromCode(stored.Language), terms, wholeText: true);
         return new DocumentView(stored with { Body = null }, fragments, truncated, stored.Body?.Length ?? 0);
+    }
+
+    /// <summary>
+    /// "Mais como este": escolhe os termos mais característicos do documento (frequência no documento × IDF),
+    /// ignora os que só aparecem nele ou em quase todos, e busca os outros documentos com qualquer um deles.
+    /// </summary>
+    public SimilarDocuments? MoreLikeThis(string key, int limit = 5, int maxTerms = 12, CancellationToken cancellationToken = default)
+    {
+        limit = Math.Clamp(limit, 1, 50);
+        List<(string Word, double Weight)> ranked;
+        using (var lease = Searchers.Acquire())
+        {
+            var searcher = lease.Searcher;
+            var doc = searcher.FindByKey(key);
+            if (doc is null)
+            {
+                return null;
+            }
+
+            var stored = searcher.Document(doc.Value);
+            var text = $"{stored.Title}\n{stored.Body ?? stored.Description ?? string.Empty}";
+            if (text.Length > 50_000)
+            {
+                text = text[..50_000];
+            }
+
+            var language = LanguageCodes.FromCode(stored.Language);
+            if (language == Language.Unknown)
+            {
+                language = Analyzer.ResolveLanguage(text, Language.Unknown);
+            }
+
+            var counts = new Dictionary<string, (int Count, string Word)>(StringComparer.Ordinal);
+            foreach (var span in Tokenizer.Tokenize(text))
+            {
+                if (span.Length < 3)
+                {
+                    continue;
+                }
+
+                var word = text.AsSpan(span.Start, span.Length);
+                if (!word.ContainsAnyExceptInRange('0', '9'))
+                {
+                    continue;
+                }
+
+                var term = Analyzer.AnalyzeWord(word, language);
+                if (string.IsNullOrEmpty(term) || term.Length < 3)
+                {
+                    continue;
+                }
+
+                counts[term] = counts.TryGetValue(term, out var current)
+                    ? (current.Count + 1, current.Word)
+                    : (1, word.ToString().ToLowerInvariant());
+            }
+
+            var docCount = Math.Max(1, searcher.CollectionStatistics(Schema.Body).DocCount);
+            ranked = [.. counts
+                .Select(pair => (pair.Value.Word, pair.Value.Count, DocFreq: searcher.TermStatistics(Schema.Body, pair.Key).DocFreq))
+                .Where(t => t.DocFreq >= 2 && (docCount < 4 || t.DocFreq < docCount * 0.6))
+                .Select(t => (t.Word, Weight: (1 + Math.Log(t.Count)) * Bm25Similarity.Idf(t.DocFreq, docCount)))
+                .OrderByDescending(t => t.Weight)
+                .ThenBy(t => t.Word, StringComparer.Ordinal)
+                .Take(Math.Clamp(maxTerms, 1, 40))];
+        }
+
+        if (ranked.Count == 0)
+        {
+            return new SimilarDocuments(key, [], string.Empty, []);
+        }
+
+        var query = string.Join(' ', ranked.Select(t => $"\"{t.Word}\""));
+        var response = Search(new SearchRequest
+        {
+            Query = query,
+            PageSize = Math.Min(100, limit + 1),
+            Operator = DefaultOperator.Or,
+            Facets = false,
+            ExactTotal = false,
+        }, cancellationToken);
+        var hits = response.Hits.Where(h => !string.Equals(h.Key, key, StringComparison.Ordinal)).Take(limit).ToList();
+        return new SimilarDocuments(key, [.. ranked.Select(t => t.Word)], query, hits);
+    }
+
+    /// <summary>Junta várias páginas de resultados (até <paramref name="limit"/>, respeitando MaxResultWindow).</summary>
+    public SearchBatch SearchMany(SearchRequest request, int limit, CancellationToken cancellationToken = default)
+    {
+        limit = Math.Clamp(limit, 1, Options.MaxResultWindow);
+        const int pageSize = 100;
+        var hits = new List<SearchHit>(Math.Min(limit, 256));
+        SearchResponse? first = null;
+        for (var page = 1; hits.Count < limit; page++)
+        {
+            var response = Search(request with { Page = page, PageSize = pageSize, Facets = page == 1 && request.Facets }, cancellationToken);
+            first ??= response;
+            hits.AddRange(response.Hits.Take(limit - hits.Count));
+            if (response.Hits.Count < pageSize || page * pageSize >= Options.MaxResultWindow)
+            {
+                break;
+            }
+        }
+
+        return new SearchBatch(first!, hits);
     }
 
     public IndexStatistics GetStatistics()

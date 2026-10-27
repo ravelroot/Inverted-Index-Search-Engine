@@ -1,6 +1,6 @@
 import { api, definirChave, temChave } from '../api.js';
 import { estado } from '../app.js';
-import { aviso, carregando, el, fmt, icone, preencher, tabela } from '../ui.js';
+import { aviso, cabecalho, carregando, el, fmt, icone, preencher, tabela } from '../ui.js';
 
 const SITUACAO = { concluida: 'Concluída', falhou: 'Falhou', cancelada: 'Cancelada' };
 
@@ -11,8 +11,7 @@ export async function render(alvo) {
   const formulario = novoFormulario(() => carregar());
 
   preencher(alvo,
-    el('header', { class: 'cabecalho' },
-      el('div', {}, el('h1', { text: 'Fontes' }), el('p', { text: 'Pastas que a Sonda varre e indexa. Arquivos novos, alterados e removidos são detectados a cada execução.' }))),
+    cabecalho('Índice', 'Fontes', 'Pastas que a Sonda varre e indexa. Arquivos novos, alterados e removidos são detectados a cada execução.'),
     estado.info?.protegido && !temChave() ? campoChave(() => carregar()) : null,
     estado.info?.somenteLeitura ? el('div', { class: 'aviso-relaxado', text: 'O índice está aberto por outro processo, então este painel funciona só para leitura.' }) : null,
     progresso,

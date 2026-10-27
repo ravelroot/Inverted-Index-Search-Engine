@@ -4,38 +4,46 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Sonda: motor de busca de texto completo com índice invertido, BM25 e análise de texto em português e inglês.">
   <title>Sonda · Busca de texto completo</title>
   <link rel="icon" href="img/icone.svg" type="image/svg+xml">
+  <link rel="search" type="application/opensearchdescription+xml" href="opensearch.xml" title="Sonda">
+  <link rel="preload" href="fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/app.css">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
-  <div class="estrutura">
-    <aside class="lateral">
-      <a class="marca" href="#/">
+  <header class="topo">
+    <div class="topo-interno">
+      <a class="marca" href="#/" aria-label="Sonda, ir para a busca">
         <img src="img/icone.svg" alt="">
-        <span><strong>Sonda</strong><small>Busca de texto completo</small></span>
+        <strong>Sonda</strong>
+        <span class="versao" id="versao">1.4</span>
       </a>
       <nav class="nav" aria-label="Navegação principal">
-        <a href="#/" data-rota="busca"><span data-icone="busca"></span>Busca</a>
-        <p class="nav-grupo">Índice</p>
-        <a href="#/indice" data-rota="indice"><span data-icone="indice"></span>Visão geral</a>
-        <a href="#/fontes" data-rota="fontes"><span data-icone="pasta"></span>Fontes</a>
-        <a href="#/termos" data-rota="termos"><span data-icone="termos"></span>Termos</a>
+        <a href="#/" data-rota="busca" title="Busca (g b)"><span data-icone="busca"></span><span class="rotulo-nav">Busca</span></a>
+        <a href="#/indice" data-rota="indice" title="Visão geral (g i)"><span data-icone="indice"></span><span class="rotulo-nav">Visão geral</span></a>
+        <a href="#/fontes" data-rota="fontes" title="Fontes (g f)"><span data-icone="pasta"></span><span class="rotulo-nav">Fontes</span></a>
+        <a href="#/termos" data-rota="termos" title="Termos (g t)"><span data-icone="termos"></span><span class="rotulo-nav">Termos</span></a>
+        <a href="#/integracoes" data-rota="integracoes" title="Integrações (g n)"><span data-icone="tomada"></span><span class="rotulo-nav">Integrações</span></a>
       </nav>
-      <div class="lateral-rodape">
-        <div class="situacao" id="situacao">
-          <strong>Carregando…</strong>
-          <span>&nbsp;</span>
-        </div>
-        <div class="acoes-lateral">
-          <button class="icone-botao" type="button" id="alternar-tema" title="Alternar tema claro e escuro" aria-label="Alternar tema claro e escuro"><span data-icone="lua"></span></button>
-          <a class="icone-botao" href="api/info" target="_blank" rel="noopener" title="Informações da API" aria-label="Informações da API"><span data-icone="api"></span></a>
-        </div>
+      <div class="topo-acoes">
+        <button class="abrir-paleta" type="button" id="abrir-paleta" aria-label="Abrir paleta de comandos"><span data-icone="comando"></span><span>Comandos e documentos</span><kbd id="tecla-paleta">Ctrl K</kbd></button>
+        <button class="icone-botao" type="button" id="abrir-atalhos" title="Atalhos de teclado (?)" aria-label="Atalhos de teclado"><span data-icone="teclado"></span></button>
+        <button class="icone-botao" type="button" id="alternar-tema" title="Alternar tema claro e escuro" aria-label="Alternar tema claro e escuro"><span data-icone="lua"></span></button>
       </div>
-    </aside>
-    <main class="conteudo" id="conteudo" tabindex="-1"></main>
+    </div>
+  </header>
+  <div class="regua" aria-label="Situação do índice">
+    <div class="regua-interna" id="situacao">
+      <span>Carregando…</span>
+    </div>
   </div>
+  <main class="conteudo" id="conteudo" tabindex="-1"></main>
+  <footer class="rodape-app">
+    <span>Sonda · índice invertido local, sem telemetria e sem chamadas externas.</span>
+    <span><a href="api/info" target="_blank" rel="noopener">API</a> · <a href="opensearch.xml" target="_blank" rel="noopener">OpenSearch</a> · <a href="metrics" target="_blank" rel="noopener">Métricas</a></span>
+  </footer>
   <div class="avisos" id="avisos" aria-live="polite"></div>
 </body>
 </html>
