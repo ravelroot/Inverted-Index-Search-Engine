@@ -1,8 +1,8 @@
 import { api, parametros } from '../api.js';
 import { navegar, estado } from '../app.js';
 import {
-  alternarSalva, arvoreExplicacao, aviso, base64Url, baixar, carregando, copiar, el, escala, fmt, fragmentos,
-  historico, icone, local, menu, ponto, preencher, registrarBusca, salvas, segmentado, sondagem, tecla,
+  alternarMarcado, alternarSalva, arvoreExplicacao, aviso, base64Url, baixar, carregando, copiar, el, escala, estaMarcado, fmt, fragmentos,
+  historico, icone, local, marcados, menu, ponto, preencher, registrarBusca, salvas, segmentado, sondagem, tecla,
 } from '../ui.js';
 
 const LEGENDA = [
@@ -37,6 +37,7 @@ function lerEstado(parametrosRota) {
     idioma: parametrosRota.get('idioma') ?? '',
     fonte: parametrosRota.get('fonte') ?? '',
     abrir: parametrosRota.get('abrir') ?? '',
+    comparar: parametrosRota.get('comparar') === '1',
   };
 }
 
@@ -52,7 +53,7 @@ function filtrosDe(atual) {
 
 export async function render(alvo, parametrosRota) {
   const atual = lerEstado(parametrosRota);
-  const ir = (mudancas) => navegar('busca', { ...filtrosDe(atual), explicar: atual.explicar ? '1' : '', ...mudancas, pagina: mudancas.pagina ?? 1 });
+  const ir = (mudancas) => navegar('busca', { ...filtrosDe(atual), explicar: atual.explicar ? '1' : '', comparar: atual.comparar ? '1' : '', ...mudancas, pagina: mudancas.pagina ?? 1 });
   const limpezas = [];
 
   const entrada = el('input', {
@@ -113,6 +114,21 @@ export async function render(alvo, parametrosRota) {
   area.append(carregando('Sondando o índice…'));
   const controle = new AbortController();
   let navegacao = null;
+  if (atual.comparar) {
+    try {
+      const comparacao = await api(`/busca/comparar${parametros({ q: atual.q, top: 10, operador: atual.operador, tipo: atual.tipo, idioma: atual.idioma, fonte: atual.fonte })}`, { sinal: controle.signal });
+      area.replaceChildren(...comparativo(comparacao, atual, ir));
+    } catch (erro) {
+      if (erro.name !== 'AbortError') {
+        area.replaceChildren(el('div', { class: 'aviso-relaxado' }, icone('pulso'), el('span', { text: erro.message })));
+      }
+    }
+    return () => {
+      controle.abort();
+      limpezas.forEach((f) => f());
+      document.querySelectorAll('.gaveta, .gaveta-fundo').forEach((n) => n.remove());
+    };
+  }
   try {
     const resposta = await api(`/busca${parametros({
       q: atual.q,
@@ -356,6 +372,7 @@ function estadoVazio(ir, entrada) {
         },
       }, el('code', { text: codigo }), el('span', { text: texto }))))),
     el('div', { class: 'pilha' },
+      painelMarcados(ir),
       el('section', { class: 'painel' },
         el('div', { class: 'painel-cabecalho' }, el('div', {}, el('h2', { text: 'Buscas salvas' }), el('p', {}, 'Salve uma busca com ', el('kbd', { text: 's' }), ' ou com a estrela nos resultados.'))),
         listaConsultas(salvasAtuais, 'estrela', 'Nenhuma busca salva ainda.', true)),
@@ -365,6 +382,121 @@ function estadoVazio(ir, entrada) {
       el('section', { class: 'painel' },
         el('div', { class: 'painel-cabecalho' }, el('div', {}, el('h2', { text: 'Experimente' }))),
         el('div', { class: 'exemplos' }, EXEMPLOS.map((exemplo) => el('button', { type: 'button', text: exemplo, onclick: () => ir({ q: exemplo }) }))))));
+}
+
+function painelMarcados(ir) {
+  const lista = marcados();
+  const corpo = el('div', { class: 'lista-rapida' });
+  const montar = () => {
+    const atuais = marcados();
+    corpo.replaceChildren(...(atuais.length === 0
+      ? [el('div', { class: 'vazio-lista', text: 'Marque documentos com o marcador nos resultados ou com m no documento aberto.' })]
+      : atuais.slice(0, 8).map((d) => el('div', { class: 'item' },
+        icone('marcador'),
+        el('button', { type: 'button', text: d.titulo, title: `${d.fonte}:${d.caminho}`, onclick: () => ir({ q: d.titulo, abrir: d.chave }) }),
+        el('button', {
+          type: 'button',
+          class: 'mini',
+          title: 'Desmarcar',
+          'aria-label': `Desmarcar ${d.titulo}`,
+          onclick: () => {
+            alternarMarcado(d);
+            montar();
+          },
+        }, icone('fechar'))))));
+  };
+  montar();
+  return el('section', { class: 'painel' },
+    el('div', { class: 'painel-cabecalho' }, el('div', {}, el('h2', { text: 'Documentos marcados' }), el('p', { text: lista.length ? `${fmt.numero(lista.length)} marcado(s), só neste navegador.` : 'Ficam só neste navegador.' }))),
+    corpo);
+}
+
+function documentoDe(hit) {
+  return { chave: hit.key, titulo: hit.title, fonte: hit.source, caminho: hit.path };
+}
+
+function botaoMarcar(hit, rotulo = false) {
+  const marcado = estaMarcado(hit.key);
+  return el('button', {
+    class: rotulo ? 'botao texto pequeno' : 'mini',
+    type: 'button',
+    'data-marcar': hit.key,
+    'aria-pressed': String(marcado),
+    title: marcado ? 'Desmarcar documento (m)' : 'Marcar documento (m)',
+    'aria-label': marcado ? `Desmarcar ${hit.title}` : `Marcar ${hit.title}`,
+    onclick: (e) => {
+      const agora = alternarMarcado(documentoDe(hit));
+      aviso(agora ? 'Documento marcado. Ele aparece na tela inicial e na paleta de comandos.' : 'Documento desmarcado.');
+      document.querySelectorAll(`[data-marcar="${CSS.escape(hit.key)}"]`).forEach((b) => b.replaceWith(botaoMarcar(hit, b.classList.contains('botao'))));
+      e.stopPropagation();
+    },
+  }, icone('marcador'), rotulo ? (marcado ? 'Marcado' : 'Marcar') : null);
+}
+
+function sugestaoOrtografica(sugestao, ir) {
+  const partes = [];
+  let posicao = 0;
+  const texto = sugestao.query;
+  for (const c of [...sugestao.corrections].sort((a, b) => a.start - b.start)) {
+    partes.push(texto.slice(posicao, c.start));
+    partes.push(el('mark', { text: c.suggestion }));
+    posicao = c.start + c.length;
+  }
+  partes.push(texto.slice(posicao));
+  return el('div', { class: 'aviso-ortografia', role: 'status' },
+    icone('sonar'),
+    el('span', {},
+      'Você quis dizer ',
+      el('button', { type: 'button', class: 'correcao', title: `Buscar “${sugestao.corrected}”`, onclick: () => ir({ q: sugestao.corrected }) }, partes),
+      `? ${fmt.numero(sugestao.total)} resultado${sugestao.total === 1 ? '' : 's'} com a correção.`));
+}
+
+function deslocamento(hit) {
+  if (hit.otherRank == null) {
+    return el('span', { class: 'mudanca nova', title: 'Não aparece no top do outro modelo', text: 'novo' });
+  }
+  const diferenca = hit.otherRank - hit.rank;
+  if (diferenca === 0) {
+    return el('span', { class: 'mudanca', title: 'Mesma posição nos dois modelos', text: '=' });
+  }
+  return el('span', {
+    class: `mudanca ${diferenca > 0 ? 'sobe' : 'desce'}`,
+    title: `Era ${hit.otherRank}º no outro modelo`,
+    text: `${diferenca > 0 ? '↑' : '↓'}${Math.abs(diferenca)}`,
+  });
+}
+
+function colunaModelo(modelo, ir, atual) {
+  const maior = modelo.hits.reduce((m, h) => Math.max(m, h.score), 0) || 1;
+  return el('section', { class: 'painel coluna-modelo' },
+    el('div', { class: 'painel-cabecalho' },
+      el('div', {},
+        el('h2', { text: modelo.similarity }),
+        el('p', { class: 'mono', text: `${fmt.numero(modelo.total)} resultado(s) · ${fmt.decimal(modelo.elapsedMs, 1)} ms` }))),
+    modelo.hits.length === 0
+      ? el('div', { class: 'vazio-lista', text: 'Nenhum documento encontrado.' })
+      : el('ol', { class: 'ranking' }, modelo.hits.map((hit) => el('li', {},
+        el('span', { class: 'posicao', text: String(hit.rank).padStart(2, '0') }),
+        el('div', { class: 'ranking-corpo' },
+          el('button', { type: 'button', text: hit.title, onclick: () => ir({ comparar: '', abrir: hit.key }) }),
+          el('small', { class: 'mono', text: `${hit.source}:${hit.path}` })),
+        el('div', { class: 'ranking-ponto' }, sondagem(hit.score), escala(hit.score / maior)),
+        deslocamento(hit)))));
+}
+
+function comparativo(dados, atual, ir) {
+  return [
+    el('div', { class: 'resumo-linha' },
+      el('div', { class: 'resumo' },
+        el('strong', { text: `${fmt.numero(dados.overlap)} de ${fmt.numero(dados.top)} em comum` }),
+        el('span', { class: 'mudo', text: `deslocamento médio de ${fmt.decimal(dados.averageShift, 1)} posição(ões) entre os documentos que aparecem nos dois` })),
+      el('div', { class: 'ferramentas' },
+        el('button', { class: 'botao secundario pequeno', type: 'button', onclick: () => ir({ comparar: '' }) }, icone('busca'), 'Voltar aos resultados'),
+        el('button', { class: 'botao secundario pequeno', type: 'button', title: 'Copiar link desta comparação', onclick: () => copiar(location.href, 'Link da comparação copiado.') }, icone('link'), 'Link'))),
+    el('div', { class: 'consulta-interpretada mono', title: 'Consulta depois da análise de texto' }, el('span', { text: 'Consulta analisada' }), el('code', { text: dados.parsedQuery })),
+    el('p', { class: 'mudo legenda-comparacao' }, 'As setas mostram quantas posições cada documento ganhou ou perdeu em relação ao outro modelo. O BM25 satura a frequência do termo e normaliza pelo tamanho do campo; o TF-IDF clássico cresce com a raiz da frequência.'),
+    el('div', { class: 'grade-comparacao' }, colunaModelo(dados.bm25, ir, atual), colunaModelo(dados.tfIdf, ir, atual)),
+  ];
 }
 
 function botaoSalvar(consulta) {
@@ -410,6 +542,7 @@ function resultados(resposta, atual, ir, densidade) {
         el('span', { class: 'mudo', text: `${fmt.decimal(resposta.elapsedMs, 1)} ms · ${resposta.similarity}${atual.ordem === 'recentes' ? ' · mais recentes primeiro' : ''}` })),
       el('div', { class: 'ferramentas' },
         botaoSalvar(atual.q),
+        el('button', { class: 'botao secundario pequeno', type: 'button', title: 'Comparar o top 10 do BM25 e do TF-IDF', onclick: () => ir({ comparar: '1' }) }, icone('comparar'), 'Comparar modelos'),
         botaoDensidade,
         el('button', { class: 'botao secundario pequeno', type: 'button', title: 'Copiar link desta busca', onclick: () => copiar(location.href, 'Link da busca copiado.') }, icone('link'), 'Link'),
         menu(el('button', { class: 'botao secundario pequeno', type: 'button' }, icone('baixar'), 'Exportar'), [
@@ -421,6 +554,10 @@ function resultados(resposta, atual, ir, densidade) {
         ]))),
     el('div', { class: 'consulta-interpretada mono', title: 'Consulta depois da análise de texto' }, el('span', { text: 'Consulta analisada' }), el('code', { text: resposta.parsedQuery })),
   ];
+  if (resposta.suggestion) {
+    blocos.push(sugestaoOrtografica(resposta.suggestion, ir));
+  }
+
   if (resposta.relaxed) {
     blocos.push(el('div', { class: 'aviso-relaxado' }, icone('pulso'), el('span', { text: 'Nenhum documento tinha todos os termos, então a busca foi ampliada para qualquer um deles.' })));
   }
@@ -500,7 +637,9 @@ function cartao(hit, posicao, atual, proporcao) {
   return el('article', { class: 'resultado', tabindex: '-1' },
     el('span', { class: 'posicao', text: String(posicao).padStart(2, '0') }),
     el('div', { class: 'corpo' },
-      el('h2', {}, el('button', { type: 'button', onclick: () => abrirDocumento(hit, atual.q) }, fragmentos(hit.titleFragments))),
+      el('div', { class: 'titulo-linha' },
+        el('h2', {}, el('button', { type: 'button', onclick: () => abrirDocumento(hit, atual.q) }, fragmentos(hit.titleFragments))),
+        botaoMarcar(hit)),
       caminho(hit),
       hit.snippet?.length ? el('p', { class: 'trecho' }, fragmentos(hit.snippet)) : null,
       el('div', { class: 'meta' },
@@ -563,6 +702,10 @@ async function abrirDocumento(hit, consulta) {
       evento.preventDefault();
       evento.stopPropagation();
       copiarCaminho();
+    } else if (evento.key === 'm') {
+      evento.preventDefault();
+      evento.stopPropagation();
+      gaveta.querySelector('[data-marcar]')?.click();
     } else if (evento.key === 'j' || evento.key === 'k' || evento.key === 's') {
       evento.stopPropagation();
     }
@@ -581,6 +724,7 @@ async function abrirDocumento(hit, consulta) {
       el('button', { class: 'mini', type: 'button', title: 'Ocorrência anterior (Shift+N)', 'aria-label': 'Ocorrência anterior', onclick: () => irPara(atualMarca - 1) }, icone('cima')),
       el('button', { class: 'mini', type: 'button', title: 'Próxima ocorrência (N)', 'aria-label': 'Próxima ocorrência', onclick: () => irPara(atualMarca + 1) }, icone('baixo')),
       el('button', { class: 'botao texto pequeno', type: 'button', title: 'Copiar caminho (C)', onclick: copiarCaminho }, icone('copiar'), 'Caminho'),
+      botaoMarcar(hit, true),
       el('button', { class: 'botao texto pequeno', type: 'button', title: 'Baixar o texto indexado', onclick: () => baixar(`api/documentos/${chave}/texto`) }, icone('baixar'), 'Texto')),
     texto,
     semelhantes);

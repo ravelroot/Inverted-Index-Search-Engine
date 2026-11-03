@@ -1,6 +1,6 @@
-import { api, parametros } from './api.js';
+import { api, baixarArquivo, parametros } from './api.js';
 import { alternarTema, atualizarSituacao, navegar, rotaAtual } from './app.js';
-import { aviso, copiar, el, ehMac, historico, icone, salvas, tecla } from './ui.js';
+import { aviso, copiar, el, ehMac, historico, icone, marcados, salvas, tecla } from './ui.js';
 
 function normalizar(texto) {
   return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -44,6 +44,19 @@ function comandosFixos() {
         }
       },
     },
+    {
+      grupo: 'Ações',
+      icone: 'baixar',
+      texto: 'Baixar cópia de segurança do índice',
+      acao: async () => {
+        try {
+          await baixarArquivo('/indice/backup', 'sonda-indice.zip');
+          aviso('Cópia de segurança baixada.');
+        } catch (erro) {
+          aviso(erro.status === 401 ? 'Informe a chave de acesso para baixar a cópia de segurança.' : erro.message, 'erro');
+        }
+      },
+    },
     { grupo: 'Ações', icone: 'teclado', texto: 'Mostrar atalhos de teclado', detalhe: '?', acao: abrirAtalhos },
   ];
   if (nome === 'busca' && consulta) {
@@ -51,7 +64,8 @@ function comandosFixos() {
     lista.splice(5, 0,
       { grupo: 'Esta busca', icone: 'tabela', texto: `Exportar “${consulta}” em CSV`, acao: () => { location.href = `api/busca/exportar${parametros({ ...filtros, formato: 'csv' })}`; } },
       { grupo: 'Esta busca', icone: 'documento', texto: `Exportar “${consulta}” em JSON`, acao: () => { location.href = `api/busca/exportar${parametros({ ...filtros, formato: 'json' })}`; } },
-      { grupo: 'Esta busca', icone: 'feed', texto: 'Copiar endereço do feed Atom', acao: () => copiar(new URL(`api/busca/feed${parametros(filtros)}`, location.href).href, 'Endereço do feed copiado.') });
+      { grupo: 'Esta busca', icone: 'feed', texto: 'Copiar endereço do feed Atom', acao: () => copiar(new URL(`api/busca/feed${parametros(filtros)}`, location.href).href, 'Endereço do feed copiado.') },
+      { grupo: 'Esta busca', icone: 'comparar', texto: 'Comparar BM25 e TF-IDF lado a lado', acao: () => navegar('busca', { ...filtros, comparar: '1' }) });
   }
   return lista;
 }
@@ -91,6 +105,7 @@ export function abrirPaleta(textoInicial = '') {
     const chave = normalizar(texto);
     const fixos = comandosFixos().filter((c) => !chave || normalizar(`${c.grupo} ${c.texto}`).includes(chave));
     const recentes = [
+      ...marcados().map((d) => ({ grupo: 'Documentos marcados', icone: 'marcador', texto: d.titulo, detalhe: `${d.fonte}:${d.caminho}`, acao: () => navegar('busca', { q: d.titulo, abrir: d.chave }) })),
       ...salvas().map((q) => ({ grupo: 'Buscas salvas', icone: 'estrela', texto: q, acao: () => navegar('busca', { q }) })),
       ...historico().filter((q) => !salvas().includes(q)).slice(0, 5).map((q) => ({ grupo: 'Buscas recentes', icone: 'relogio', texto: q, acao: () => navegar('busca', { q }) })),
     ].filter((c) => !chave || normalizar(c.texto).includes(chave));
@@ -230,6 +245,7 @@ const ATALHOS = [
     ['Próxima ocorrência', ['n']],
     ['Ocorrência anterior', ['Shift', 'n']],
     ['Copiar caminho', ['c']],
+    ['Marcar ou desmarcar o documento', ['m']],
   ]],
 ];
 

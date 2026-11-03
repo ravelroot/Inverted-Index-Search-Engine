@@ -93,7 +93,8 @@ api.AddEndpointFilter(async (context, next) =>
     var http = context.HttpContext;
     var writing = !HttpMethods.IsGet(http.Request.Method) && !HttpMethods.IsHead(http.Request.Method);
     var exempt = http.Request.Path.StartsWithSegments("/api/info");
-    if ((writing || settings.Api.ProtectReads) && !exempt && !Authorized(http))
+    var sensitive = http.Request.Path.StartsWithSegments("/api/indice/backup");
+    if ((writing || sensitive || settings.Api.ProtectReads) && !exempt && !Authorized(http))
     {
         return Results.Problem(
             title: "Chave de acesso ausente ou inválida.",
@@ -162,6 +163,23 @@ api.MapGet("/busca", (string? q, int? pagina, int? tamanho, string? ordem, strin
     return Results.Ok(response);
 });
 
+api.MapGet("/busca/comparar", (string? q, int? top, string? operador, string? tipo, string? idioma, string? fonte, CancellationToken cancellationToken) =>
+{
+    var request = BuildRequest(q, null, null, operador, tipo, idioma, fonte);
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    timeout.CancelAfter(TimeSpan.FromSeconds(20));
+    return Results.Ok(sonda.Engine.Compare(request, Math.Clamp(top ?? 10, 1, 50), timeout.Token));
+});
+
+api.MapGet("/ortografia", (string? q, CancellationToken cancellationToken) =>
+{
+    var text = (q ?? string.Empty).Trim();
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    timeout.CancelAfter(TimeSpan.FromSeconds(5));
+    var suggestion = text.Length is > 0 and <= 500 ? sonda.Engine.Suggest(text, timeout.Token) : null;
+    return Results.Ok(new { consulta = text, sugestao = suggestion });
+});
+
 api.MapGet("/busca/exportar", (string? q, string? formato, int? limite, string? ordem, string? similaridade, string? operador, string? tipo, string? idioma, string? fonte, CancellationToken cancellationToken) =>
 {
     if (!SearchExport.TryParseFormat(formato, out var format))
@@ -180,7 +198,7 @@ api.MapGet("/busca/exportar", (string? q, string? formato, int? limite, string? 
 
 api.MapGet("/busca/feed", (HttpContext context, string? q, string? ordem, string? similaridade, string? operador, string? tipo, string? idioma, string? fonte, CancellationToken cancellationToken) =>
 {
-    var request = BuildRequest(q, ordem, similaridade, operador, tipo, idioma, fonte) with { PageSize = 20, Facets = false, ExactTotal = false };
+    var request = BuildRequest(q, ordem, similaridade, operador, tipo, idioma, fonte) with { PageSize = 20, Facets = false, ExactTotal = false, Spelling = false };
     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
     timeout.CancelAfter(TimeSpan.FromSeconds(20));
     var response = sonda.Engine.Search(request, timeout.Token);
@@ -212,6 +230,7 @@ api.MapGet("/sugestoes", (string? q, int? limite, string? formato, CancellationT
                 Facets = false,
                 ExactTotal = false,
                 Snippets = false,
+                Spelling = false,
             }, timeout.Token);
             foreach (var hit in response.Hits)
             {
@@ -276,6 +295,24 @@ api.MapPost("/indice/otimizar", async (int? segmentos, CancellationToken cancell
 });
 
 api.MapPost("/indice/verificar", () => Results.Ok(sonda.Engine.Verify()));
+
+api.MapGet("/indice/backup", (CancellationToken cancellationToken) =>
+{
+    var path = Path.Combine(Path.GetTempPath(), $"sonda-backup-{Guid.NewGuid():N}.zip");
+    var stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.DeleteOnClose);
+    try
+    {
+        var manifest = sonda.Engine.Backup(stream, cancellationToken);
+        stream.Position = 0;
+        var name = $"sonda-indice-{manifest.Generation}-{DateTime.Now:yyyyMMdd-HHmmss}.zip";
+        return Results.Stream(stream, "application/zip", name);
+    }
+    catch
+    {
+        stream.Dispose();
+        throw;
+    }
+});
 
 api.MapGet("/termos", (string? campo, string? prefixo, int? limite, string? ordem) =>
 {

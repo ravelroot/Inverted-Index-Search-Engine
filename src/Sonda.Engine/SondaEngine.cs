@@ -59,6 +59,8 @@ public sealed record SearchRequest
     public string? Language { get; init; }
 
     public string? Source { get; init; }
+
+    public bool Spelling { get; init; } = true;
 }
 
 public sealed record SearchHit(
@@ -88,7 +90,8 @@ public sealed record SearchResponse(
     bool Relaxed,
     long Evaluated,
     IReadOnlyList<SearchHit> Hits,
-    IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>> Facets);
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>> Facets,
+    SpellingSuggestion? Suggestion = null);
 
 public sealed record SegmentStatistics(string Name, int Documents, int Deleted, long SizeBytes, string Origin, DateTimeOffset CreatedAt);
 
@@ -128,10 +131,17 @@ public sealed record SimilarDocuments(string Key, IReadOnlyList<string> Terms, s
 
 public sealed record SearchBatch(SearchResponse First, IReadOnlyList<SearchHit> Hits);
 
+public sealed record ComparedHit(string Key, string Title, string Source, string Path, float Score, int Rank, int? OtherRank);
+
+public sealed record ModelRanking(string Similarity, long Total, double ElapsedMs, IReadOnlyList<ComparedHit> Hits);
+
+public sealed record ModelComparison(string Query, string ParsedQuery, int Top, int Overlap, double AverageShift, ModelRanking Bm25, ModelRanking TfIdf);
+
 public sealed class SondaEngine : IDisposable
 {
     private readonly SemaphoreSlim _indexingGate = new(1, 1);
     private readonly QueryParser _parser;
+    private readonly SpellChecker _spelling;
     private readonly string _indexPath;
     private int _disposed;
 
@@ -143,6 +153,7 @@ public sealed class SondaEngine : IDisposable
         Analyzer = analyzer;
         _indexPath = Path.GetFullPath(options.IndexPath);
         _parser = new QueryParser(analyzer, [(Schema.Title, options.TitleBoost), (Schema.Body, 1f)]);
+        _spelling = new SpellChecker(analyzer);
         if (writer is not null)
         {
             writer.Committed += commit =>
@@ -258,6 +269,28 @@ public sealed class SondaEngine : IDisposable
                 explanation));
         }
 
+        SpellingSuggestion? suggestion = null;
+        if (request.Spelling && page == 1)
+        {
+            var corrections = _spelling.Check(searcher, request.Query);
+            if (corrections.Count > 0)
+            {
+                var corrected = SpellChecker.Apply(request.Query, corrections);
+                try
+                {
+                    var check = WithFilters(_parser.Parse(corrected, defaultOperator).Query, request);
+                    var checkResults = searcher.Search(check, 1, SortMode.Relevance, true, false, cancellationToken);
+                    if (checkResults.TotalHits > 0 && (results.TotalHits == 0 || relaxed || checkResults.TotalHits >= results.TotalHits))
+                    {
+                        suggestion = new SpellingSuggestion(request.Query, corrected, checkResults.TotalHits, corrections);
+                    }
+                }
+                catch (QueryParseException)
+                {
+                }
+            }
+        }
+
         return new SearchResponse(
             request.Query,
             query.ToString() ?? string.Empty,
@@ -270,7 +303,56 @@ public sealed class SondaEngine : IDisposable
             relaxed,
             results.Evaluated,
             hits,
-            results.Facets);
+            results.Facets,
+            suggestion);
+    }
+
+    public SpellingSuggestion? Suggest(string query, CancellationToken cancellationToken = default)
+        => Search(new SearchRequest { Query = query, PageSize = 1, Facets = false, ExactTotal = false, Snippets = false }, cancellationToken).Suggestion;
+
+    public ModelComparison Compare(SearchRequest request, int top = 10, CancellationToken cancellationToken = default)
+    {
+        top = Math.Clamp(top, 1, 50);
+        var baseRequest = request with { Page = 1, PageSize = top, Facets = false, Snippets = false, Explain = false, Spelling = false, Sort = SortMode.Relevance };
+        var bm25 = Search(baseRequest with { Similarity = "BM25" }, cancellationToken);
+        var tfidf = Search(baseRequest with { Similarity = "TFIDF" }, cancellationToken);
+        var bm25Ranks = bm25.Hits.Select((h, i) => (h.Key, Rank: i + 1)).ToDictionary(x => x.Key, x => x.Rank, StringComparer.Ordinal);
+        var tfidfRanks = tfidf.Hits.Select((h, i) => (h.Key, Rank: i + 1)).ToDictionary(x => x.Key, x => x.Rank, StringComparer.Ordinal);
+        var overlap = bm25Ranks.Keys.Count(tfidfRanks.ContainsKey);
+        var shifts = bm25Ranks.Where(p => tfidfRanks.ContainsKey(p.Key)).Select(p => Math.Abs(p.Value - tfidfRanks[p.Key])).ToList();
+        return new ModelComparison(
+            request.Query,
+            bm25.ParsedQuery,
+            top,
+            overlap,
+            shifts.Count == 0 ? 0 : shifts.Average(),
+            Ranking(bm25, tfidfRanks),
+            Ranking(tfidf, bm25Ranks));
+
+        static ModelRanking Ranking(SearchResponse response, Dictionary<string, int> other) => new(
+            response.Similarity,
+            response.Total,
+            response.ElapsedMs,
+            [.. response.Hits.Select((h, i) => new ComparedHit(h.Key, h.Title, h.Source, h.Path, h.Score, i + 1, other.TryGetValue(h.Key, out var rank) ? rank : null))]);
+    }
+
+    public BackupManifest Backup(Stream destination, CancellationToken cancellationToken = default)
+    {
+        var start = destination.CanSeek ? destination.Position : 0;
+        for (var attempt = 0; ; attempt++)
+        {
+            using var lease = Searchers.Acquire();
+            try
+            {
+                return IndexBackup.Write(lease.Searcher.Snapshot, _indexPath, destination, cancellationToken);
+            }
+            catch (FileNotFoundException) when (attempt < 3 && destination.CanSeek)
+            {
+                destination.SetLength(start);
+                destination.Position = start;
+                Searchers.Refresh();
+            }
+        }
     }
 
     private static Query WithFilters(Query query, SearchRequest request)
@@ -422,6 +504,7 @@ public sealed class SondaEngine : IDisposable
             Operator = DefaultOperator.Or,
             Facets = false,
             ExactTotal = false,
+            Spelling = false,
         }, cancellationToken);
         var hits = response.Hits.Where(h => !string.Equals(h.Key, key, StringComparison.Ordinal)).Take(limit).ToList();
         return new SimilarDocuments(key, [.. ranked.Select(t => t.Word)], query, hits);
@@ -436,7 +519,7 @@ public sealed class SondaEngine : IDisposable
         SearchResponse? first = null;
         for (var page = 1; hits.Count < limit; page++)
         {
-            var response = Search(request with { Page = page, PageSize = pageSize, Facets = page == 1 && request.Facets }, cancellationToken);
+            var response = Search(request with { Page = page, PageSize = pageSize, Facets = page == 1 && request.Facets, Spelling = false }, cancellationToken);
             first ??= response;
             hits.AddRange(response.Hits.Take(limit - hits.Count));
             if (response.Hits.Count < pageSize || page * pageSize >= Options.MaxResultWindow)

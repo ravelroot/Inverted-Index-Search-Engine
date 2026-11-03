@@ -37,6 +37,10 @@ try
         "analisar" or "analyze" => Commands.Analyze(arguments),
         "otimizar" or "optimize" => await Commands.OptimizeAsync(arguments, cancellation.Token),
         "verificar" or "check" => Commands.Verify(arguments),
+        "comparar" or "compare" => Commands.Compare(arguments),
+        "corrigir" or "spell" => Commands.Spell(arguments),
+        "backup" or "copiar-indice" => Commands.Backup(arguments),
+        "restaurar" or "restore" => Commands.Restore(arguments),
         "remover-fonte" or "remove-source" => Commands.RemoveSource(arguments),
         "benchmark" or "bench" => await Benchmark.RunAsync(arguments, cancellation.Token),
         "versao" or "versão" or "version" => Commands.Version(),
@@ -233,6 +237,11 @@ internal static class Commands
         if (response.Relaxed)
         {
             Output.Warning("Nenhum documento tinha todos os termos; mostrando os que têm parte deles.");
+        }
+
+        if (response.Suggestion is { } suggestion)
+        {
+            Output.Warning($"Você quis dizer: {suggestion.Corrected} ({suggestion.Total:N0} resultado(s))?");
         }
 
         Output.Line();
@@ -438,6 +447,136 @@ internal static class Commands
         return result.Problems.Count == 0 ? 0 : 4;
     }
 
+    public static int Compare(Arguments args)
+    {
+        var text = string.Join(' ', args.Positionals);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw new ArgumentException("Informe a consulta: sonda comparar \"índice invertido\"");
+        }
+
+        using var engine = OpenForReading(args);
+        var comparison = engine.Compare(new SearchRequest
+        {
+            Query = text,
+            Operator = args.Flag("ou", "or") ? DefaultOperator.Or : args.Flag("e", "and") ? DefaultOperator.And : null,
+            Extension = args.Get("tipo", "ext"),
+            Language = args.Get("idioma-doc", "lang"),
+            Source = args.Get("fonte", "source"),
+        }, args.GetInt(10, "top", "quantidade", "size"));
+        if (args.Flag("json"))
+        {
+            Console.WriteLine(JsonSerializer.Serialize(comparison, Json));
+            return 0;
+        }
+
+        Output.Title($"{comparison.Bm25.Similarity} × {comparison.TfIdf.Similarity} · {comparison.Bm25.Total:N0} resultado(s)");
+        Output.Dim($"Consulta interpretada: {comparison.ParsedQuery}");
+        Output.Dim($"Em comum no top {comparison.Top}: {comparison.Overlap} · deslocamento médio {comparison.AverageShift:N1} posição(ões)");
+        Output.Line();
+        var rows = new List<string[]>();
+        for (var i = 0; i < Math.Max(comparison.Bm25.Hits.Count, comparison.TfIdf.Hits.Count); i++)
+        {
+            var left = i < comparison.Bm25.Hits.Count ? comparison.Bm25.Hits[i] : null;
+            var right = i < comparison.TfIdf.Hits.Count ? comparison.TfIdf.Hits[i] : null;
+            rows.Add([
+                (i + 1).ToString(CultureInfo.CurrentCulture),
+                left is null ? string.Empty : $"{Shorten(left.Title, 34)} ({left.Score:0.###})",
+                right is null ? string.Empty : $"{Shorten(right.Title, 34)} ({right.Score:0.###})",
+                right is null ? string.Empty : Shift(right),
+            ]);
+        }
+
+        Output.Table(["#", comparison.Bm25.Similarity, comparison.TfIdf.Similarity, "Mudança"], rows);
+        return 0;
+
+        static string Shift(ComparedHit hit) => hit.OtherRank switch
+        {
+            null => "novo",
+            var other when other == hit.Rank => "=",
+            var other when other > hit.Rank => $"sobe {other - hit.Rank}",
+            var other => $"desce {hit.Rank - other}",
+        };
+    }
+
+    public static int Spell(Arguments args)
+    {
+        var text = string.Join(' ', args.Positionals);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw new ArgumentException("Informe a consulta: sonda corrigir \"algoritimo de busca\"");
+        }
+
+        using var engine = OpenForReading(args);
+        var suggestion = engine.Suggest(text);
+        if (args.Flag("json"))
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { consulta = text, sugestao = suggestion }, Json));
+            return 0;
+        }
+
+        if (suggestion is null)
+        {
+            Output.Line("Nenhuma correção: todas as palavras existem no índice ou não há alternativa próxima.");
+            return 0;
+        }
+
+        Output.Title($"Você quis dizer: {suggestion.Corrected}");
+        foreach (var correction in suggestion.Corrections)
+        {
+            Output.Dim($"  {correction.Original} → {correction.Suggestion} · distância {correction.Distance} · {correction.DocFreq:N0} documento(s)");
+        }
+
+        Output.Dim($"{suggestion.Total:N0} resultado(s) com a correção.");
+        return 0;
+    }
+
+    public static int Backup(Arguments args)
+    {
+        var options = Options(args);
+        var output = args.Positional(0) ?? $"sonda-indice-{DateTime.Now:yyyyMMdd-HHmmss}.zip";
+        using var engine = OpenForReading(args);
+        BackupManifest manifest;
+        using (var stream = new FileStream(output, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        {
+            manifest = engine.Backup(stream);
+        }
+
+        Output.Line($"Cópia de segurança da geração {manifest.Generation} gravada em {Path.GetFullPath(output)}.");
+        Output.Dim($"{manifest.Documents:N0} documento(s) · {manifest.Files.Count} arquivo(s) · {Output.Bytes(new FileInfo(output).Length)} · índice {Path.GetFullPath(options.IndexPath)}");
+        return 0;
+    }
+
+    public static int Restore(Arguments args)
+    {
+        var input = args.Positional(0) ?? throw new ArgumentException("Informe o arquivo: sonda restaurar <copia.zip> [--substituir]");
+        if (!File.Exists(input))
+        {
+            throw new FileNotFoundException($"Arquivo não encontrado: {input}");
+        }
+
+        var options = Options(args);
+        RestoreResult result;
+        try
+        {
+            result = IndexBackup.Restore(input, options.IndexPath, args.Flag("substituir", "replace"));
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+
+        Output.Line($"Índice restaurado em {result.IndexPath}: geração {result.Generation}, {result.Documents:N0} documento(s), {result.Files} arquivo(s) com checksum válido.");
+        if (result.PreviousPath is not null)
+        {
+            Output.Dim($"O índice anterior foi guardado em {result.PreviousPath}.");
+        }
+
+        return 0;
+    }
+
+    private static string Shorten(string text, int max) => text.Length <= max ? text : text[..(max - 1)] + "…";
+
     public static int RemoveSource(Arguments args)
     {
         var name = args.Positional(0) ?? throw new ArgumentException("Informe a fonte: sonda remover-fonte <nome>");
@@ -471,6 +610,10 @@ internal static class Commands
                 ["analisar \"texto\"", "Mostra tokenização, stopwords e radicais RSLP e Porter"],
                 ["otimizar", "Mescla os segmentos e limpa excluídos. --segmentos"],
                 ["verificar", "Confere o checksum CRC32 de todos os arquivos do índice"],
+                ["comparar \"consulta\"", "Top BM25 e TF-IDF lado a lado, com posições em comum e mudanças. --top, --ou, --tipo, --fonte, --json"],
+                ["corrigir \"consulta\"", "Sugere a grafia mais próxima para palavras que não existem no índice. --json"],
+                ["backup [arquivo.zip]", "Grava uma cópia de segurança consistente do índice (funciona com o servidor aberto)"],
+                ["restaurar <arquivo.zip>", "Restaura uma cópia conferindo os checksums. --substituir guarda o índice atual ao lado"],
                 ["remover-fonte <nome>", "Remove do índice todos os documentos de uma fonte"],
                 ["benchmark", "Gera um corpus sintético e mede indexação e consultas. --docs, --consultas"],
             ]);

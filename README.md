@@ -34,6 +34,9 @@
 - **Indexação incremental:** arquivos sem mudança são pulados, alterados são substituídos e removidos saem do índice. Pastas podem ser observadas e reindexadas sozinhas.
 - **Commit atômico, mesclagem em segundo plano** e verificação de integridade de todos os arquivos.
 - **Mais como este:** cada documento lista os semelhantes a partir dos seus termos mais característicos (tf × idf).
+- **Você quis dizer?:** palavras que não existem no índice são corrigidas pelo dicionário de termos (Damerau-Levenshtein) e voltam com a grafia original, com acentos.
+- **Comparação de modelos:** o top do BM25 e do TF-IDF lado a lado, com documentos em comum e quantas posições cada um subiu ou desceu.
+- **Cópia de segurança:** o último commit inteiro num `.zip` com manifesto, gerado com o servidor aberto e restaurado com verificação de CRC32.
 - **Integrações prontas:** busca pela barra do navegador (OpenSearch, com sugestões), feed Atom de qualquer busca, exportação CSV/JSON/NDJSON, métricas Prometheus em `/metrics` e webhooks assinados com HMAC-SHA256.
 - **Estatísticas de busca:** o que foi pesquisado, latência média e p95 e as buscas que não encontraram nada.
 - **Painel web**, **API REST** e **linha de comando** (`sonda`), todos sobre o mesmo motor.
@@ -45,8 +48,11 @@ Painel para pesquisar, entender a pontuação, enxergar o índice por dentro e c
 
 - **Busca** com sugestões instantâneas enquanto você digita, buscas salvas e recentes, facetas, trechos destacados, consulta analisada, alternância BM25/TF-IDF, explicação da pontuação em árvore, densidade confortável ou compacta, exportação e link direto.
 - **Pontuação como sondagem:** o número aparece em itálico, como as profundidades de uma carta, com uma **escala gráfica** de cinco segmentos relativa ao primeiro resultado.
-- **Documento** em gaveta lateral com navegação entre ocorrências (`n` e `Shift+N`), contador, cópia do caminho, download do texto e **documentos semelhantes**.
-- **Visão geral** com segmentos, campos, distribuição por fonte, idioma e tipo, **estatísticas de consultas**, mesclagem e verificação de integridade.
+- **Documento** em gaveta lateral com navegação entre ocorrências (`n` e `Shift+N`), contador, cópia do caminho, download do texto, **documentos semelhantes** e marcador (`m`).
+- **Você quis dizer?** (1.5) acima dos resultados quando alguma palavra não existe no índice, com as correções destacadas e o total que a consulta corrigida encontra.
+- **Comparar modelos** (1.5): top 10 do BM25 e do TF-IDF lado a lado, com etiquetas de subida, descida e documentos novos.
+- **Documentos marcados** (1.5) na tela inicial e na paleta de comandos, guardados só no navegador.
+- **Visão geral** com segmentos, campos, distribuição por fonte, idioma e tipo, **estatísticas de consultas**, mesclagem, verificação de integridade e **cópia de segurança** do índice.
 - **Fontes** com cadastro de pastas, progresso da indexação em tempo real por Server-Sent Events e histórico.
 - **Termos** com o dicionário do índice, a lista invertida de cada termo (ponteiros, blocos e posições) e um analisador que mostra o caminho de cada palavra até virar termo.
 - **Integrações** (nova) com OpenSearch, feed Atom, exportação, Prometheus, webhooks e exemplos prontos de API em curl, PowerShell, JavaScript e Python usando o endereço do seu servidor.
@@ -72,7 +78,7 @@ Painel para pesquisar, entender a pontuação, enxergar o índice por dentro e c
 | `/` | Focar a busca |
 | `j` · `k` · `Enter` | Navegar e abrir resultados |
 | `s` | Salvar ou remover a busca atual |
-| `n` · `Shift N` · `c` | Próxima e anterior ocorrência, copiar caminho (documento aberto) |
+| `n` · `Shift N` · `c` · `m` | Próxima e anterior ocorrência, copiar caminho, marcar documento (documento aberto) |
 | `g b` · `g i` · `g f` · `g t` · `g n` | Busca, Visão geral, Fontes, Termos, Integrações |
 | `?` · `Esc` | Mostrar atalhos, fechar painel ou diálogo |
 
@@ -83,6 +89,8 @@ Painel para pesquisar, entender a pontuação, enxergar o índice por dentro e c
 | <img src="docs/images/indice.png" alt="Visão geral do índice com consultas, segmentos e campos"> | <img src="docs/images/integracoes.png" alt="Integrações: OpenSearch, feed Atom, exportação, Prometheus, webhooks e API"> |
 | <img src="docs/images/paleta.png" alt="Paleta de comandos com documentos e ações"> | <img src="docs/images/fontes.png" alt="Fontes, cadastro e histórico de indexação"> |
 | <img src="docs/images/termos.png" alt="Dicionário e lista invertida de um termo"> | <img src="docs/images/painel-escuro.png" alt="Busca no tema escuro"> |
+| <img src="docs/images/ortografia.png" alt="Você quis dizer: correção da consulta com as palavras destacadas"> | <img src="docs/images/comparar.png" alt="Comparação do top 10 do BM25 e do TF-IDF lado a lado"> |
+| <img src="docs/images/marcados.png" alt="Tela inicial com documentos marcados, buscas salvas e recentes"> | |
 
 <p align="center"><img src="docs/images/celular.png" width="300" alt="Busca no celular"></p>
 
@@ -213,6 +221,10 @@ dotnet run --project src/Sonda.Cli -- indexar C:\Documentos --fonte documentos
 dotnet run --project src/Sonda.Cli -- buscar "índice invertido" --explicar
 dotnet run --project src/Sonda.Cli -- buscar "farol" --formato csv --limite 1000 --saida farol.csv
 dotnet run --project src/Sonda.Cli -- semelhantes exemplos:tecnologia/bm25-relevancia.md
+dotnet run --project src/Sonda.Cli -- corrigir "algoritimo de buzca"
+dotnet run --project src/Sonda.Cli -- comparar "índice invertido bm25" --ou
+dotnet run --project src/Sonda.Cli -- backup copia.zip
+dotnet run --project src/Sonda.Cli -- restaurar copia.zip --substituir
 ```
 
 | Comando | Função |
@@ -226,10 +238,14 @@ dotnet run --project src/Sonda.Cli -- semelhantes exemplos:tecnologia/bm25-relev
 | `analisar "texto"` | Tokenização, stopwords e radicais RSLP e Porter |
 | `otimizar` | Mescla os segmentos e remove os excluídos |
 | `verificar` | Confere o CRC32 de todos os arquivos do índice |
+| `comparar "consulta"` | Top BM25 e TF-IDF lado a lado, com documentos em comum e mudança de posição. `--top`, `--ou`, `--tipo`, `--fonte`, `--json` |
+| `corrigir "consulta"` | Sugere a grafia mais próxima para palavras que não existem no índice. `--json` |
+| `backup [arquivo.zip]` | Cópia de segurança consistente do último commit (funciona com o servidor aberto) |
+| `restaurar <arquivo.zip>` | Restaura conferindo tamanhos e CRC32. `--substituir` guarda o índice atual como `indice.anterior-<data>` |
 | `remover-fonte <nome>` | Remove do índice os documentos de uma fonte |
 | `benchmark` | Gera um corpus sintético e mede indexação e consultas. `--docs`, `--consultas` |
 
-Comandos de leitura funcionam com o servidor aberto. Os de escrita exigem que ele esteja parado, porque só um processo grava no índice (`write.lock`).
+Comandos de leitura (inclusive `backup`) funcionam com o servidor aberto. Os de escrita e o `restaurar` exigem que ele esteja parado, porque só um processo grava no índice (`write.lock`).
 
 ## Sintaxe de busca
 
@@ -247,7 +263,7 @@ Comandos de leitura funcionam com o servidor aberto. Os de escrita exigem que el
 | `titulo:farol` · `corpo:` · `caminho:` | Busca só no campo |
 | `tipo:html` · `idioma:en` · `fonte:exemplos` | Filtros que não mudam a pontuação |
 
-Acentos e maiúsculas não importam. Se nenhum documento tiver todos os termos, a busca é ampliada sozinha para qualquer um deles e o painel avisa.
+Acentos e maiúsculas não importam. Se nenhum documento tiver todos os termos, a busca é ampliada sozinha para qualquer um deles e o painel avisa. Se alguma palavra não existir no índice, o painel sugere a consulta corrigida (`algoritimo de buzca` › `algoritmo de busca`), preservando operadores, campos e filtros.
 
 ## Configuração
 
@@ -270,8 +286,10 @@ Com `Sonda:Api:ApiKey` definido, as rotas que alteram o índice exigem o cabeça
 
 | Método | Rota | Função |
 |---|---|---|
-| GET | `/api/busca?q=&pagina=&tamanho=&ordem=&similaridade=&operador=&explicar=&tipo=&idioma=&fonte=` | Busca com trechos, facetas e explicação |
+| GET | `/api/busca?q=&pagina=&tamanho=&ordem=&similaridade=&operador=&explicar=&tipo=&idioma=&fonte=` | Busca com trechos, facetas, explicação e sugestão de correção (`suggestion`) |
 | GET | `/api/busca/exportar?q=&formato=csv\|json\|ndjson&limite=` | Exporta até 1.000 resultados como arquivo |
+| GET | `/api/busca/comparar?q=&top=&operador=&tipo=&idioma=&fonte=` | Top BM25 e TF-IDF com posições, documentos em comum e deslocamento médio |
+| GET | `/api/ortografia?q=` | Consulta corrigida e as correções (original, sugestão, distância, documentos) |
 | GET | `/api/busca/feed?q=` | Feed Atom com os 20 melhores resultados |
 | GET | `/api/sugestoes?q=&limite=&formato=` | Documentos cujo título casa com o que está sendo digitado (`formato=opensearch` para navegadores) |
 | GET | `/api/buscas/estatisticas` | Total de buscas, sem resultado, média, p95, mais pesquisadas e recentes |
@@ -280,6 +298,7 @@ Com `Sonda:Api:ApiKey` definido, as rotas que alteram o índice exigem o cabeça
 | GET | `/api/documentos/{chave}/texto` | Texto indexado do documento, como `.txt` |
 | GET | `/api/indice` | Estatísticas, segmentos e campos |
 | POST | `/api/indice/otimizar` · `/api/indice/verificar` | Mesclagem forçada e verificação de checksums |
+| GET | `/api/indice/backup` | Cópia de segurança do último commit em `.zip` (exige a chave sempre que ela estiver definida) |
 | GET | `/api/termos?campo=&prefixo=&ordem=` · `/api/termos/postagens?campo=&termo=` | Dicionário e lista invertida |
 | GET | `/api/analise?texto=` | Análise de texto passo a passo |
 | GET · POST · DELETE | `/api/fontes` · `/api/fontes/{nome}` | Lista, cadastra e remove fontes |
@@ -329,7 +348,9 @@ erDiagram
 | `_N.dv` | Valores por documento para facetas e ordenação |
 | `_N_G.liv` | Mapa de bits dos documentos excluídos |
 
-O diagrama completo, com todos os campos, tipos, chaves, o formato binário de cada arquivo e as regras de consistência, está em [`Banco-de-Dados-Sonda.pdf`](Banco-de-Dados-Sonda.pdf).
+A cópia de segurança (1.5) é um `.zip` com exatamente os arquivos do último commit e o manifesto `sonda-backup.json` (formato, versão, geração, documentos, data e a lista de arquivos com o tamanho exato de cada um). A restauração extrai numa pasta temporária, confere tamanhos e CRC32 e só então troca a pasta do índice, guardando a anterior.
+
+O diagrama completo, com todos os campos, tipos, chaves, o formato binário de cada arquivo, o formato da cópia de segurança e as regras de consistência, está em [`Banco-de-Dados-Sonda.pdf`](Banco-de-Dados-Sonda.pdf).
 
 ## Estrutura
 
@@ -354,7 +375,7 @@ docs/              imagens, manual e diagrama do banco
 dotnet test tests/Sonda.Tests
 ```
 
-São 96 casos que provam, entre outras coisas, que a pontuação BM25 é igual à fórmula, que o Porter reproduz os exemplos do artigo original, que 6.000 documentos indexados em 8 threads com vários flushes ficam todos pesquisáveis, que o WAND devolve o mesmo top 10 da busca exaustiva, que a mesclagem preserva os resultados e remove os excluídos que um byte alterado num arquivo é detectado pelo checksum e que a exportação CSV neutraliza fórmulas e mantém o BOM.
+São 103 casos que provam, entre outras coisas, que a pontuação BM25 é igual à fórmula, que o Porter reproduz os exemplos do artigo original, que 6.000 documentos indexados em 8 threads com vários flushes ficam todos pesquisáveis, que o WAND devolve o mesmo top 10 da busca exaustiva, que a mesclagem preserva os resultados e remove os excluídos que um byte alterado num arquivo é detectado pelo checksum e que a exportação CSV neutraliza fórmulas e mantém o BOM, que a correção ortográfica devolve a grafia com acentos e preserva operadores e filtros, que a comparação de modelos é simétrica e que uma cópia de segurança restaurada devolve os mesmos resultados e recusa arquivos fora do padrão.
 
 A integração contínua ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) compila tudo com avisos tratados como erro, roda os testes, indexa os exemplos pela linha de comando, verifica os checksums, roda um benchmark curto e gera a imagem Docker.
 
@@ -369,8 +390,17 @@ A integração contínua ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 - O painel monta tudo com `textContent`, então trechos de documentos nunca são interpretados como HTML.
 - Webhooks só aceitam `http` e `https`, saem em segundo plano com tempo limite e podem ser assinados com HMAC-SHA256.
 - A exportação CSV coloca um apóstrofo antes de células que começam com `=`, `+`, `-` ou `@`, para nada virar fórmula no Excel.
-- Buscas salvas e recentes ficam só no navegador; as estatísticas de busca ficam só na memória do servidor.
+- Buscas salvas, recentes e documentos marcados ficam só no navegador; as estatísticas de busca ficam só na memória do servidor.
+- A cópia de segurança exige a chave de acesso sempre que ela existir, e a restauração recusa caminhos (`../`), nomes fora do padrão do índice e arquivos que não estão no manifesto.
 - Nada é enviado para fora por conta própria: sem telemetria, sem CDN; webhooks só para os endereços que você configurar.
+
+## Novidades da 1.5.0
+
+- **Você quis dizer?** na busca, na API (`suggestion` e `/api/ortografia`) e na linha de comando (`corrigir` e aviso no `buscar`).
+- **Comparar modelos:** BM25 e TF-IDF lado a lado no painel, em `/api/busca/comparar` e em `sonda comparar`.
+- **Documentos marcados** com o marcador nos resultados e o atalho `m`, na tela inicial e na paleta de comandos.
+- **Cópia de segurança e restauração** do índice: botão na Visão geral, `/api/indice/backup`, `sonda backup` e `sonda restaurar` com verificação de CRC32.
+- Manual (capítulo 14) e documento do banco de dados (apêndice da cópia de segurança) atualizados; 103 testes.
 
 ## Novidades da 1.4.0
 

@@ -39,6 +39,32 @@ export async function api(caminho, { metodo = 'GET', corpo, sinal } = {}) {
   return dados;
 }
 
+export async function baixarArquivo(caminho, nomePadrao) {
+  const cabecalhos = {};
+  if (chave) {
+    cabecalhos['X-Sonda-Key'] = chave;
+  }
+  const resposta = await fetch(`api${caminho}`, { headers: cabecalhos });
+  if (!resposta.ok) {
+    const tipo = resposta.headers.get('content-type') ?? '';
+    const dados = tipo.includes('json') ? await resposta.json() : null;
+    const erro = new Error(dados?.detail ?? dados?.title ?? `Erro ${resposta.status}`);
+    erro.status = resposta.status;
+    throw erro;
+  }
+  const disposicao = resposta.headers.get('content-disposition') ?? '';
+  const nome = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposicao)?.[1] ?? nomePadrao;
+  const url = URL.createObjectURL(await resposta.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = decodeURIComponent(nome);
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  return nome;
+}
+
 export function parametros(objeto) {
   const busca = new URLSearchParams();
   for (const [nome, valor] of Object.entries(objeto)) {

@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { api, baixarArquivo } from '../api.js';
 import { atualizarSituacao, navegar } from '../app.js';
 import { aviso, cabecalho, carregando, el, fmt, icone, ponto, tabela } from '../ui.js';
 
@@ -62,6 +62,21 @@ function montar(dados, atualizar, consultas) {
         el('td', { class: 'num', text: fmt.decimal(f.averageLength, 1) })))));
 
   const resultadoManutencao = el('p', { class: 'mudo', style: { marginTop: '10px' } });
+  const copia = el('button', { class: 'botao secundario', type: 'button', title: 'Baixa um .zip com todos os arquivos do último commit' }, icone('baixar'), 'Cópia de segurança');
+  copia.addEventListener('click', async () => {
+    copia.disabled = true;
+    resultadoManutencao.textContent = 'Gerando a cópia de segurança do último commit…';
+    try {
+      const nome = await baixarArquivo('/indice/backup', 'sonda-indice.zip');
+      resultadoManutencao.textContent = `Cópia ${decodeURIComponent(nome)} gerada. Para restaurar, pare o servidor e rode: sonda restaurar ${decodeURIComponent(nome)} --substituir`;
+      aviso('Cópia de segurança baixada.');
+    } catch (erro) {
+      resultadoManutencao.textContent = erro.status === 401 ? 'Informe a chave de acesso para baixar a cópia de segurança.' : erro.message;
+      aviso(resultadoManutencao.textContent, 'erro');
+    } finally {
+      copia.disabled = false;
+    }
+  });
   const otimizar = el('button', { class: 'botao secundario', type: 'button' }, icone('mesclar'), 'Otimizar índice');
   const verificar = el('button', { class: 'botao secundario', type: 'button' }, icone('escudo'), 'Verificar integridade');
   otimizar.addEventListener('click', async () => {
@@ -95,9 +110,9 @@ function montar(dados, atualizar, consultas) {
   });
 
   const manutencao = el('section', { class: 'painel' },
-    el('div', { class: 'painel-cabecalho' }, el('div', {}, el('h2', { text: 'Manutenção' }), el('p', { text: 'A mesclagem junta os segmentos e remove de vez os documentos excluídos.' }))),
+    el('div', { class: 'painel-cabecalho' }, el('div', {}, el('h2', { text: 'Manutenção' }), el('p', { text: 'A mesclagem junta os segmentos e remove de vez os documentos excluídos. A cópia de segurança leva o último commit inteiro num .zip verificável.' }))),
     el('div', { class: 'painel-corpo' },
-      el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, otimizar, verificar),
+      el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, otimizar, verificar, copia),
       resultadoManutencao,
       dados.writer ? el('p', { class: 'mudo', style: { marginTop: '10px' }, text: `Buffer em memória: ${fmt.bytes(dados.writer.bufferedBytes)} · exclusões pendentes: ${fmt.numero(dados.writer.pendingDeletes)}${dados.writer.merging ? ' · mesclagem em andamento' : ''}` }) : null,
       el('p', { class: 'mudo mono', style: { marginTop: '6px', wordBreak: 'break-all' }, text: dados.path })));

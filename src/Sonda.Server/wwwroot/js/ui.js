@@ -29,6 +29,8 @@ const ICONES = {
   sonar: '<path d="M12 4v9"/><circle cx="12" cy="15" r="2"/><path d="M7 17.5a6 6 0 0 0 10 0M4.5 19.5a9.5 9.5 0 0 0 15 0"/>',
   navegador: '<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M3 9h18M6.5 6.8h.01M9 6.8h.01"/>',
   gancho: '<path d="M18 8.5a3.5 3.5 0 1 0-6.4 2L8 17"/><circle cx="6.5" cy="18" r="2.5"/><path d="M14 18h4.5M16 12.5l2.5 5"/>',
+  marcador: '<path d="M7 4.5h10a.5.5 0 0 1 .5.5v14.5L12 16l-5.5 3.5V5a.5.5 0 0 1 .5-.5Z"/>',
+  comparar: '<path d="M8 4v16M16 4v16M4 8h4M16 12h4M4 16h4"/>',
   tabela: '<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10"/>',
   mais_como: '<circle cx="9" cy="10" r="4.5"/><circle cx="15" cy="14" r="4.5"/>',
 };
@@ -239,6 +241,23 @@ export function alternarSalva(consulta) {
   const lista = salvas();
   const existe = lista.includes(consulta);
   local.gravar('salvas', existe ? lista.filter((q) => q !== consulta) : [consulta, ...lista].slice(0, 20));
+  return !existe;
+}
+
+export function marcados() {
+  return local.ler('marcados', []);
+}
+
+export function estaMarcado(chave) {
+  return marcados().some((d) => d.chave === chave);
+}
+
+export function alternarMarcado(documento) {
+  const lista = marcados();
+  const existe = lista.some((d) => d.chave === documento.chave);
+  local.gravar('marcados', existe
+    ? lista.filter((d) => d.chave !== documento.chave)
+    : [{ chave: documento.chave, titulo: documento.titulo, fonte: documento.fonte, caminho: documento.caminho, quando: Date.now() }, ...lista].slice(0, 50));
   return !existe;
 }
 
